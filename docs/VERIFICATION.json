@@ -1,0 +1,46 @@
+{
+  "performed_at": "2026-11-14T01:57:56.941797+00:00",
+  "application_version": "0.4.1",
+  "python": "3.13.5",
+  "ladybug_version": "0.22.3",
+  "offline_unit_tests": {
+    "passed": 118,
+    "failed": 0,
+    "command": "SQUAD_PYTHON=<prepared-venv>/bin/python sh scripts/check.sh",
+    "runtime_setup": "pinned dependency and FTS extension installed beforehand"
+  },
+  "required_synthetic_acceptance": "passed; complete 3-of-4 outcomes, immediate qualification, restart persistence and delivery deduplication",
+  "knowledge_checks": "passed with real LadybugDB; atomic/idempotent batches, immutable IDs, linked sources/contradictions, indexed BM25 search, graph traversal, portable export/import and restored FTS",
+  "portfolio_context": "passed; supplied actual snapshot kept separate, graph evidence plus passing numerical test and complete three-win/one-loss counts, no invented fills",
+  "configuration_and_secrets": "passed; every individual native personal variable required explicitly, removed file/JSON-blob interfaces and architecture switches rejected, credentials excluded/redacted, all-worktree path protection and existing-state preservation",
+  "cloud_recovery": "passed with real SQLite/Ladybug archives and fake remote transport; uploaded bytes downloaded and fully restore-tested, checksums/identity/path checks, no overwrite, original identity retained",
+  "backup_change_tracking": "passed; graph revisions, ledger observations without events, source/cache changes, interval/destination changes and ambiguous pending upload recovery",
+  "drive_client": "passed with deterministic fake HTTP; all renewable OAuth bindings required, token refresh, folder/project scope, resumable upload, deduplicated completed upload, quota enforcement, hostile URL rejection and download integrity",
+  "owner_concurrency": "passed; independent process writer blocked by active owner lock, nested same-command operations allowed, missing owner never silently provisioned",
+  "native_skill_validation": "five skills passed official Skill Creator quick_validate.py",
+  "native_package_contracts": "passed; marketplace, manifest/version, trusted-project config, canonical/generated skill parity and setup-guide parity",
+  "gitops_reconciliation": "passed offline; task idempotency, source/profile/plugin drift, actual-backup requirement, post-restore invalidation, stale receipts and foreign-task preservation",
+  "git_fast_forward_integration": "passed against local fixture remote; divergent history preserved",
+  "release_archive_smoke": "passed; both ZIPs validated/public-only; extracted package contracts, Ladybug/FTS runtime probe, onboarding, doctor and synthetic demo; no production DB",
+  "fresh_checkout_doctor": {
+    "repo_ready": true,
+    "operational_ready": false,
+    "stage": "ONBOARDING_REQUIRED",
+    "database_created": false
+  },
+  "existing_private_state": "untouched; no live ledger or private source archive was opened or reset for this change",
+  "real_google_account_authorized_or_tested": false,
+  "dot_created": false,
+  "saved_schedules_activated": false,
+  "real_notification_delivery_tested": false,
+  "notes": [
+    "Real account OAuth, native owner bindings, independent scheduled runtime probe and delivery receipts remain per-user onboarding; fixtures never establish production activation.",
+    "LadybugDB is research knowledge; SQLite retains numerical/accounting history. All live state stays outside Git.",
+    "Drive recovery uses separately authorized private Google storage; an OpenAI subscription does not itself grant Drive capacity.",
+    "CI targets Python 3.11 and 3.13; local execution used the version recorded above.",
+    "GitOps uses required approved-ref fast-forward reconciliation. No profile-file template or compatibility configuration loader remains."
+  ],
+  "single_deployment_workflow": "Dot cloud owner, LadybugDB knowledge, SQLite numerical/accounting ledger, verified Drive recovery, approved-ref fast-forward reconciliation; no alternate setup modes",
+  "knowledge_runtime_resources": "real export/import/search passed with 128 MiB buffer pool and two worker threads; bounded parallelism fixes observed export pool exhaustion on high-CPU hosts",
+  "bootstrap_packaging": "passed; concise README registration and single setup instruction; DOT_START_HERE.md generated into canonical and installed onboarding references; both release archives retain the complete guide before a checkout/Python runtime exists"
+}

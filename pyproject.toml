@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "investment-discovery-squad"
+version = "0.4.1"
+description = "Auditable signal research and Dot-delivered alerts; human-executed trades."
+requires-python = ">=3.11"
+dependencies = ["ladybug==0.22.3"]
+
+[project.scripts]
+investment-squad = "squad.cli:main"
+
+[tool.setuptools]
+packages = ["squad"]

@@ -1,0 +1,4 @@
+# Documented local-marketplace enablement; loaded only in trusted projects.
+# Model, permissions, user profile and runtime remain user/environment choices.
+[plugins."investment-discovery@investment-discovery"]
+enabled = true
