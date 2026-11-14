@@ -1,10 +1,9 @@
 ---
 name: squad-monitor
-description: Evaluate forecasts, deliver historically qualified research alerts and review a live trial lasting at most 30 days.
+description: Evaluate future predictions, deliver historically qualified research alerts and report complete results.
 ---
-Follow [cloud-thread route](../squad-onboard/references/cloud.md#durable-child-task); run sibling `squad-onboard/scripts/main.py` in child task's cloud container.
+Follow [computer access](../squad-onboard/references/cloud.md#computer-and-command-access); run sibling `squad-onboard/scripts/main.py` on Dot computer.
 
-1. Run `run`; inspect JSON/stderr, errors, blocked predictions, corrections and trial status. `report --signal ID` retains full history.
-2. Apply [operations](references/operations.md) for delivery and continuation work. [Validation](references/validation.md) owns endpoint rules and trial review.
-3. Review-required/stopped trial pauses research/monitor automations through [automation procedure](../squad-reconcile/references/deployment.md#scheduled-automations). Present performance; continuation requires user's decision.
-4. Apply shared [backup procedure](../squad-onboard/references/storage.md#full-cloud-backup). Operations owns incidents; portfolio/fill/exit questions use squad-trades.
+1. Run `run`; inspect JSON/stderr, errors, blocked predictions and corrections. `report --signal ID` retains full history.
+2. Apply [operations](references/operations.md) for delivery and remaining work. [Validation](references/validation.md) owns prediction endpoints.
+3. Apply [backup procedure](../squad-onboard/references/storage.md#connected-backup-procedure). Operations owns incidents; current-portfolio advice uses squad-trades.

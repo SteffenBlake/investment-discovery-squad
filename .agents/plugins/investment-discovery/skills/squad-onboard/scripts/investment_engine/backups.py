@@ -13,14 +13,14 @@ from pathlib import Path, PurePosixPath
 
 from . import __version__
 from .configuration import private_directory, write_private_json
-from .drive import Drive
+from .drive import read_inventory, check_capacity
 from .knowledge import Knowledge
 from .runtime import owner_lock
-from .provisioning import FROZEN, _open_store
+from .provisioning import frozen_settings_match, _open_store
 from .ledger import IMMUTABLE
-from .util import canonical, digest, instant, now_utc, stamp
+from .util import digest, instant, now_utc, stamp
 
-BOOKKEEPING = ("cloud_backup_verified", "backup_created", "run_completed")
+BOOKKEEPING = ("cloud_backup_accepted", "cloud_backup_verified", "backup_created", "run_completed")
 
 
 def file_hash(path):
@@ -32,7 +32,8 @@ def file_hash(path):
 
 
 def covered_sequence(store):
-    return store.db.execute("SELECT COALESCE(MAX(seq),0) FROM events WHERE kind NOT IN (?,?,?)", BOOKKEEPING).fetchone()[0]
+    placeholders = ','.join('?' for _ in BOOKKEEPING)
+    return store.db.execute(f"SELECT COALESCE(MAX(seq),0) FROM events WHERE kind NOT IN ({placeholders})", BOOKKEEPING).fetchone()[0]
 
 
 def ledger_revision(store):
@@ -174,7 +175,7 @@ def verify_archive(path, settings, expected_identity, stage):
         meta = dict(ledger.execute('SELECT key,value FROM meta'))
         if meta.get('mode') != 'production' or meta.get('profile_id') != settings['profile_id'] or meta.get('setup_identity') != expected_identity:
             raise ValueError('Restored ledger ownership/mode mismatch')
-        if meta.get('frozen_settings') != canonical({key: settings[key] for key in FROZEN}):
+        if not frozen_settings_match(meta.get('frozen_settings'), settings):
             raise ValueError('Restored ledger economics differ from reviewed configuration')
     finally:
         ledger.close()
@@ -191,13 +192,13 @@ def verify_archive(path, settings, expected_identity, stage):
 
 
 def current_backup(settings, store):
-    row = store.db.execute("SELECT data FROM events WHERE kind='cloud_backup_verified' ORDER BY seq DESC LIMIT 1").fetchone()
+    row = store.db.execute("SELECT data FROM events WHERE kind IN ('cloud_backup_accepted','cloud_backup_verified') ORDER BY seq DESC LIMIT 1").fetchone()
     if row is None:
-        return {'current': False, 'reason': 'No independently verified cloud recovery archive'}
+        return {'current': False, 'reason': 'No accepted connected Drive upload recorded'}
     receipt = json.loads(row[0])
     with Knowledge(settings, store.identity) as graph:
         revision = graph.meta('revision')
-    age = (instant(store.clock()) - instant(receipt['verified_at'])).total_seconds()
+    age = (instant(store.clock()) - instant(receipt.get('accepted_at') or receipt['verified_at'])).total_seconds()
     current = (receipt.get('folder_id') == settings['storage']['cloud_backup']['folder_id']
                and receipt.get('covered_seq') == covered_sequence(store) and receipt.get('graph_revision') == revision
                and receipt.get('ledger_revision') == ledger_revision(store) and receipt.get('artifact_revision') == artifact_revision(store)
@@ -205,63 +206,120 @@ def current_backup(settings, store):
     return {'current': current, 'receipt': receipt, 'reason': None if current else 'Evidence changed, backup interval elapsed or destination changed'}
 
 
-def cloud_backup(settings, store, *, drive=None, force=False):
-    drive = drive or Drive(settings)
+def pending_upload(settings, store):
+    folder = Path(settings['storage']['backup_directory']).resolve()
+    operation = json.loads((folder / 'pending-upload.json').read_text())
+    path = Path(operation['path'])
+    if path.parent.resolve() != folder or file_hash(path) != operation['sha256']:
+        raise ValueError('Pending upload archive was changed; preserve it and inspect before retry')
+    manifest = operation['manifest']
+    if (manifest['profile_id'] != settings['profile_id'] or manifest['setup_identity'] != store.identity
+            or operation['folder_id'] != settings['storage']['cloud_backup']['folder_id']):
+        raise ValueError('Pending archive belongs to another installation or backup folder')
+    return operation
+
+
+def cloud_backup(settings, store, *, inventory=None, force=False):
     folder = Path(settings['storage']['backup_directory'])
     private_directory(folder)
     pending = folder / 'pending-upload.json'
     with owner_lock(settings):
-        if not force and not pending.exists():
-            current = current_backup(settings, store)
-            if current['current']:
-                return {'created': False, **current}
+        current = current_backup(settings, store)
+        if not force and not pending.exists() and current['current']:
+            return {'created': False, **current}
+        if inventory is None:
+            return {'current': False, 'action': 'inventory', 'folder_id': settings['storage']['cloud_backup']['folder_id']}
+        files = read_inventory(settings, inventory)
         if pending.exists():
-            operation = json.loads(pending.read_text())
-            path = Path(operation['path'])
-            if path.parent.resolve() != folder.resolve() or file_hash(path) != operation['sha256']:
-                raise ValueError('Pending upload archive was changed; preserve it and inspect before retry')
+            operation = pending_upload(settings, store)
         else:
             path = folder / ('recovery-' + now_utc().strftime('%Y%m%dT%H%M%S%f') + '.backup.zip')
             manifest = snapshot(settings, store, path)
-            operation = {'path': str(path.resolve()), 'sha256': file_hash(path), 'manifest': manifest}
+            sha256 = file_hash(path)
+            named = path.with_name(f"investment-discovery-{settings['profile_id']}-{store.identity}-{sha256}.backup.zip")
+            path.rename(named)
+            destination = settings['storage']['cloud_backup']['folder_id']
+            previous = store.db.execute("""SELECT json_extract(data,'$.file_id') FROM events
+              WHERE kind IN ('cloud_backup_accepted','cloud_backup_verified','restore_completed')
+              AND json_extract(data,'$.folder_id')=? AND json_extract(data,'$.file_id') IS NOT NULL ORDER BY seq DESC LIMIT 1""", (destination,)).fetchone()
+            operation = {'path': str(named.resolve()), 'sha256': sha256, 'manifest': manifest,
+                         'folder_id': destination, 'file_id': previous[0] if previous else None, 'upload_started': False}
             write_private_json(pending, operation)
+        path = Path(operation['path'])
+        target_id = operation.get('file_id')
+        matches = [item for item in files if item['name'] == path.name and int(item.get('size', -1)) == path.stat().st_size
+                   and (target_id is None or item['id'] == target_id)]
+        if matches:
+            result = accept_upload(settings, store, {'file_id': matches[0]['id'], 'folder_id': operation['folder_id'],
+                                   'name': path.name, 'size': path.stat().st_size, 'receipt': matches[0]})
+            return result
+        if target_id and not any(item['id'] == target_id for item in files):
+            raise ValueError('Backup file missing from connected folder; inspect original file before updating')
+        check_capacity(settings, path.stat().st_size, files, replace_file_id=target_id)
+        arguments = {'file_uri': str(path), 'mime_type': 'application/zip'}
+        if target_id:
+            arguments.update(fileId=target_id, name=path.name)
+        else:
+            arguments.update(file_name=path.name, parent_folder_id=operation['folder_id'])
+        return {'current': False, 'action': 'inspect_upload' if operation['upload_started'] else 'update' if target_id else 'upload',
+                'tool': 'update_file' if target_id else 'upload_file', 'arguments': arguments,
+                'sha256': operation['sha256']}
+
+
+def start_upload(settings, store):
+    with owner_lock(settings):
+        operation = pending_upload(settings, store)
+        if operation['upload_started']:
+            raise ValueError('Upload outcome uncertain; inspect connected Drive inventory before retry')
+        operation['upload_started'] = True
+        write_private_json(Path(settings['storage']['backup_directory']) / 'pending-upload.json', operation)
+        return {'upload_started': True, 'file_name': Path(operation['path']).name}
+
+
+def retry_upload(settings, store, evidence):
+    if evidence.get('failed_before_creation') is not True or not evidence.get('reason'):
+        raise ValueError('Retry requires observed failure before remote creation and its reason; resolve ambiguous uploads through inventory')
+    with owner_lock(settings):
+        operation = pending_upload(settings, store)
+        operation.update(upload_started=False, retry_evidence=evidence)
+        write_private_json(Path(settings['storage']['backup_directory']) / 'pending-upload.json', operation)
+        return {'retry_ready': True}
+
+
+def accept_upload(settings, store, response):
+    with owner_lock(settings):
+        operation = pending_upload(settings, store)
+        path = Path(operation['path'])
+        if (not response.get('file_id') or response.get('folder_id') != operation['folder_id']
+                or response.get('name') != path.name or not response.get('receipt')
+                or operation.get('file_id') and response['file_id'] != operation['file_id']):
+            raise ValueError('Connected Drive upload receipt must identify actual file, name and backup folder')
+        if response.get('size') is not None and int(response['size']) != path.stat().st_size:
+            raise ValueError('Connected Drive upload size mismatch')
         manifest = operation['manifest']
-        if manifest['profile_id'] != settings['profile_id'] or manifest['setup_identity'] != store.identity:
-            raise ValueError('Pending archive belongs to another installation')
-        remote = drive.upload(path, manifest, operation['sha256'])
-        metadata = drive.verify_upload(path, remote['id'], store.identity)
-        receipt = {'provider': 'google_drive', 'folder_id': settings['storage']['cloud_backup']['folder_id'],
-                   'file_id': remote['id'], 'sha256': operation['sha256'], 'verified_at': stamp(store.clock()),
+        receipt = {'provider': 'google_drive', 'folder_id': operation['folder_id'], 'file_id': response['file_id'],
+                   'name': path.name, 'sha256': operation['sha256'], 'accepted_at': stamp(store.clock()),
                    'covered_seq': manifest['covered_seq'], 'graph_revision': manifest['graph_revision'],
                    'ledger_revision': manifest['ledger_revision'], 'artifact_revision': manifest['artifact_revision'],
-                   'graph_hash': manifest['graph_hash'], 'md5': metadata['md5Checksum'], 'checksum_verified': True}
+                   'graph_hash': manifest['graph_hash'], 'upload_accepted': True, 'remote_integrity_verified': False,
+                   'connector_receipt': response['receipt']}
         with store.transaction():
-            store.event('cloud_backup_verified', **receipt)
-        successful_ids = {row[0] for row in store.db.execute(
-            "SELECT json_extract(data,'$.file_id') FROM events WHERE kind='cloud_backup_verified'")}
-        drive.retain_latest(remote['id'], successful_ids)
-        pending.unlink()
+            store.event('cloud_backup_accepted', **receipt)
+        (path.parent / 'pending-upload.json').unlink()
         path.unlink()
-        # Completing an older pending upload need not cover writes made since its creation.
-        current = current_backup(settings, store)
-        if not current['current']:
-            return cloud_backup(settings, store, drive=drive, force=True)
-        return {'created': True, **current}
+        return {'created': True, **current_backup(settings, store)}
 
 
-def restore(settings, file_id, expected_identity, *, drive=None):
-    drive = drive or Drive(settings)
+def restore(settings, archive, expected_identity, *, file_id=None):
+    archive = Path(archive)
     folder = Path(settings['storage']['backup_directory'])
     private_directory(folder)
     root = Path(settings['storage']['database_path']).parent
     with owner_lock(settings, create=True):
         if any(path.name != '.squad-lock' for path in root.iterdir()):
             raise ValueError('Restore target must be empty; existing state is never overwritten')
-        metadata, downloaded = drive.download(file_id, expected_identity=expected_identity)
         with tempfile.TemporaryDirectory(dir=folder, prefix='.restore-') as temporary:
             temporary = Path(temporary)
-            archive = temporary / 'download.zip'
-            archive.write_bytes(downloaded)
             manifest = verify_archive(archive, settings, expected_identity, temporary / 'state')
             stage = temporary / 'state'
             marker = root / '.restore-in-progress.json'
@@ -277,10 +335,11 @@ def restore(settings, file_id, expected_identity, *, drive=None):
             store = _open_store(settings, restoring_identity=expected_identity)
             try:
                 with store.transaction():
-                    store.event('restore_completed', file_id=file_id, sha256=hashlib.sha256(downloaded).hexdigest(),
+                    store.event('restore_completed', file_id=file_id, folder_id=settings['storage']['cloud_backup']['folder_id'],
+                                sha256=file_hash(archive),
                                 original_identity=expected_identity, requires_reconciliation=True)
             finally:
                 store.close()
             marker.unlink()
         return {'restored': True, 'setup_identity': expected_identity, 'file_id': file_id,
-                'next': 'Review actual Dot tasks and notification history before resuming; preserve pending and uncertain deliveries'}
+                'next': 'Review saved automations and message history before resuming; preserve pending and uncertain deliveries'}

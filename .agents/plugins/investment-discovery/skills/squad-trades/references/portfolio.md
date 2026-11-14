@@ -1,33 +1,26 @@
-# Actual portfolio and research context
+# Current portfolio and next actions
 
-The user supplies current available uninvested cash, currency, holdings, timestamp and pending orders. Normalize that information into a private JSON file:
+Each advice request starts from user's current holdings and available cash. Normalize pasted information into temporary private JSON:
 
 ```text
 {cash: decimal amount, currency: three-letter code,
- holdings: {SYMBOL: quantity}, as_of: offset timestamp,
- pending_orders: user-supplied details if any}
+ holdings: {SYMBOL: quantity}, as_of: offset timestamp}
 ```
 
-Perform squad-monitor's due evaluation and delivery work before assessing advice. Review research corrections, then retrieve context:
+Supplied cash means available money. Use it directly for affordability. User restrictions and broker terms guide advice through [configuration](../../squad-onboard/references/configuration.md).
+
+Apply squad-monitor's due evaluation/delivery work; review corrections. Retrieve evidence:
 
 ```sh
-python .agents/skills/squad-onboard/scripts/main.py knowledge context --portfolio /private/today.json --query 'current risks' --limit 15 --hops 2
+python .agents/skills/squad-onboard/scripts/main.py knowledge context --portfolio /private/current.json --query 'current risks' --limit 15 --hops 2
 ```
 
-The command saves the supplied portfolio snapshot and returns matching research entities, directed relationships, dated claims, original source URLs, contradictions and numerical prediction results. Missing symbols and truncation flags identify coverage gaps. [Research retrieval](../../squad-research/references/knowledge.md) defines evidence fields and search bounds.
+Command reads supplied account for this request and returns research entities, directed relationships, dated claims, original sources, contradictions and prediction results. [Research retrieval](../../squad-research/references/knowledge.md) owns evidence fields and search bounds.
 
-Supplied cash means money available to invest; user has already accounted for pending-order commitments. Assess holdings and cash together. Holding cash remains valid when evidence supports it. Actual supplied cash and holdings control sizing. New snapshots capture account changes such as transfers, dividends and stock splits. Reported fills retain execution history. Original initialization settings remain available for saved-history ownership and recovery.
-
-For a fresh qualified bullish prediction:
+Explain what to do next: buy, hold, sell or keep cash, with reasons and uncertainty. For fresh qualified bullish forecast:
 
 ```sh
-python .agents/skills/squad-onboard/scripts/main.py idea --prediction ACTUAL_ID --portfolio /private/today.json
+python .agents/skills/squad-onboard/scripts/main.py idea --prediction ACTUAL_ID --portfolio /private/current.json
 ```
 
-Python chooses an affordable lot quantity using actual supplied cash, configured fixed/per-unit entry fees and outstanding purchase suggestions. Explain quantity, price limit, estimated fee, total required cash, evidence, horizon and review conditions. Confirm broker quotes, fee estimate, settled cash, pending orders and restrictions before entry. Identical retries with the same portfolio return the saved suggestion; changed portfolios require reviewing the existing suggestion.
-
-## Fills and exit follow-up
-
-Record actual reported executions using [trade commands](../../squad-onboard/references/commands.md#trades). Partial fills use distinct IDs; exact retries preserve one record. Obtain an updated actual portfolio snapshot for subsequent sizing.
-
-For an authorized exit reminder, discover exposed automation and message-history tools. Reuse an existing matching reminder; inspect saved state after uncertain creation before retrying. Read saved due time, timezone and destination back; retain actual returned automation/message IDs. Review at forecast horizon or invalidation and record actual reported exits. Report unavailable reminder capabilities and give the review time. The human executes trades.
+Python calculates affordable lot quantity from supplied cash, price limit and configured entry fees. Explain price, quantity, total cost, evidence, horizon and review conditions. Multiple full-budget suggestions represent alternatives. Joint recommendations must fit supplied cash together. User executes orders; next request supplies current account again. Remove temporary input file after request.

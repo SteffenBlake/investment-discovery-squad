@@ -10,7 +10,7 @@ from pathlib import Path
 from .util import canonical, now_utc, stamp
 from .configuration import private_directory
 
-IMMUTABLE = ("events", "specs", "datasets", "test_plans", "trials", "predictions", "outcomes", "prices", "indicators", "fills", "ideas")
+IMMUTABLE = ("events", "specs", "datasets", "test_plans", "trials", "predictions", "outcomes", "prices", "indicators")
 
 
 class Store:
@@ -62,8 +62,6 @@ class Store:
         CREATE TABLE IF NOT EXISTS outbox(
           id TEXT PRIMARY KEY, signal_id TEXT NOT NULL UNIQUE REFERENCES specs(id), at TEXT NOT NULL,
           status TEXT NOT NULL, token TEXT, receipt TEXT, data TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS fills(id TEXT PRIMARY KEY, at TEXT NOT NULL, data TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS ideas(id TEXT PRIMARY KEY, at TEXT NOT NULL, data TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS specs_symbol_at ON specs(json_extract(data,'$.symbol'), at DESC);
         """)
         for table in IMMUTABLE:

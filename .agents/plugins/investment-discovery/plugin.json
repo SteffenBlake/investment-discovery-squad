@@ -2,5 +2,5 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "investment-discovery",
   "version": "1.0.2",
-  "description": "Historical investment research with one-shot tests, a 30-day live trial, private records and three-copy Google Drive backups."
+  "description": "Historical investment research, one-shot tests, current-portfolio recommendations, private records and one Google Drive backup file."
 }

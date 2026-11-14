@@ -22,7 +22,7 @@ from tests.fixtures import completed_installation, native_environment, formal_te
 
 class SquadTests(unittest.TestCase):
     def setUp(self):
-        remote = patch('investment_engine.drive.Drive.list', return_value=[])
+        remote = patch('investment_engine.drive.read_inventory', return_value=[])
         remote.start()
         self.addCleanup(remote.stop)
         self.temp = tempfile.TemporaryDirectory()
@@ -98,7 +98,7 @@ class SquadTests(unittest.TestCase):
         self.assertEqual(signal['definition']['mechanism'], self.spec['mechanism'])
         self.assertEqual(len(result['knowledge']['claims']), 1)
         self.assertTrue(result['portfolio_supplied_by_user'])
-        self.assertEqual(self.store.db.execute('SELECT COUNT(*) FROM fills').fetchone()[0], 0)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM events WHERE kind='portfolio_snapshot'").fetchone()[0], 0)
 
     def test_look_ahead_rejected(self):
         dataset = historical_fixture()
@@ -116,8 +116,8 @@ class SquadTests(unittest.TestCase):
         holdout = prepare_test_fixture(self.engine, self.spec['id'], historical_fixture())
         holdout['availability_verified'] = False
         result = self.engine.backtest(self.spec['id'], holdout)
-        self.assertFalse(result['passed'])
-        self.assertEqual(self.store.state(self.spec['id']), 'REJECTED')
+        self.assertFalse(result['tested'])
+        self.assertEqual(self.store.state(self.spec['id']), 'DISCOVERED')
 
     def test_supplied_pass_flag_cannot_override_baseline_failure(self):
         dataset = historical_fixture()
@@ -274,19 +274,6 @@ class SquadTests(unittest.TestCase):
         self.assertIsNone(observed_feature(self.store, "Gold", as_of=self.clock() - timedelta(days=1)))
         self.assertIsNotNone(observed_feature(self.store, "Gold", as_of=self.clock()))
 
-    def test_reported_fill_is_saved_once_without_reconstructing_account(self):
-        portfolio = Portfolio(self.engine)
-        args = ("reported-fill-1", "SYNTH", "buy", 2, "20", "0", self.clock())
-        self.assertTrue(portfolio.fill(*args))
-        self.assertFalse(portfolio.fill(*args))
-        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM fills").fetchone()[0], 1)
-        self.assertFalse(portfolio.balance()["available"])
-
-    def test_reported_fills_can_include_external_account_activity(self):
-        portfolio = Portfolio(self.engine)
-        for side, units in (("buy", 101), ("sell", 1)):
-            self.assertTrue(portfolio.fill(side, "SYNTH", side, units, "10", "0", self.clock()))
-        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM fills").fetchone()[0], 2)
 
     def test_degraded_signal_blocks_purchase(self):
         self.validated()
@@ -295,20 +282,23 @@ class SquadTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'qualified'):
             Portfolio(self.engine).idea(prediction, self.snapshot())
 
-    def test_idea_does_not_spend_cash_or_submit_trade(self):
+    def test_sizing_uses_each_request_cash_without_persisting_account(self):
         self.qualified()
         prediction = self.predict("fresh-opportunity")
         portfolio = Portfolio(self.engine)
+        before = self.store.db.total_changes
         idea = portfolio.idea(prediction, self.snapshot())
         self.assertEqual(idea["status"], "recommendation_only")
         self.assertLessEqual(float(idea["notional"]), 1000)
-        self.assertEqual(portfolio.balance()["cash"], "1000.00")
-        self.assertEqual(portfolio.balance()["holdings"], {})
+        changed = portfolio.idea(prediction, self.snapshot(cash="500"))
+        self.assertLessEqual(float(changed["total_cash_required"]), 500)
+        self.assertEqual(self.store.db.total_changes, before)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM events WHERE kind IN ('portfolio_snapshot','trade_idea')").fetchone()[0], 0)
 
     def test_runner_returns_delivery_before_feeds_and_redacts_caught_errors(self):
         self.qualified()
         secret = "fake-bound-refresh-token"
-        with patch.dict(os.environ, {"SQUAD_GOOGLE_REFRESH_TOKEN": secret}), patch("investment_engine.feeds.market", side_effect=OSError("failed " + secret)) as feed:
+        with patch.dict(os.environ, {"BROKER_API_TOKEN": secret}), patch("investment_engine.feeds.market", side_effect=OSError("failed " + secret)) as feed:
             first = run(self.engine)
             feed.assert_not_called()
             self.assertTrue(first["remaining_work"])
@@ -330,14 +320,6 @@ class SquadTests(unittest.TestCase):
             status = execute(parser().parse_args(['status']))
             self.assertEqual(init['setup_identity'], status['setup_identity'])
 
-    def test_historical_qualification_yields_before_portfolio_work(self):
-        self.validated()
-        with patch.object(Portfolio, 'balance') as balance:
-            result = run(self.engine, offline=True)
-        balance.assert_not_called()
-        self.assertTrue(result['remaining_work'])
-        self.assertEqual(len(result['alerts']), 1)
-        self.assertEqual(self.engine.record(self.spec['id'])['successes'], 0)
 
     def test_deadline_comes_from_saved_pattern_duration(self):
         self.validated()
@@ -345,9 +327,6 @@ class SquadTests(unittest.TestCase):
         row = self.store.db.execute("SELECT due_at FROM predictions WHERE id=?", (prediction,)).fetchone()
         self.assertEqual(row["due_at"], stamp(self.clock() + timedelta(days=self.spec["horizon_days"])))
 
-    def test_fractional_fill_rejected_without_truncation(self):
-        with self.assertRaisesRegex(ValueError, "Fractional"):
-            Portfolio(self.engine).fill("fractional", "SYNTH", "buy", 1.5, "10", "0", self.clock())
 
     def test_idea_expiry_cannot_outlive_quote_freshness(self):
         self.qualified()
@@ -424,8 +403,78 @@ class SquadTests(unittest.TestCase):
             second = run(self.engine, continue_work=True)
         self.assertEqual(first["errors"], [])
         self.assertEqual(len(first["registered"]), 1)
-        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM ideas").fetchone()[0], 0)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM events WHERE kind='trade_idea'").fetchone()[0], 0)
         self.assertEqual(second["registered"], [])
+
+    def test_fresh_indicator_obtains_quote_after_capture(self):
+        self.settings['max_candidates_per_day'] = 2
+        spec = {**spec_fixture('fresh-quote'), 'article': 'Gold'}
+        self.engine.discover(spec)
+        formal_test(self.engine, spec['id'], historical_fixture())
+        order = []
+        def market(*args, **kwargs):
+            order.append('market')
+            quote_at = self.clock() - timedelta(seconds=1)
+            if kwargs.get('minimum_capture_at'):
+                self.clock.advance(seconds=1)
+                quote_at = self.clock()
+            return {'history': [], 'quote': {'at': stamp(quote_at), 'price': 10},
+                    'splits': [], 'source': 'synthetic://market'}
+        def attention(*args):
+            order.append('attention')
+            return {'key': 'wikipedia:Gold', 'source': 'synthetic://wiki', 'rows': [
+                {'at': stamp(self.clock() - timedelta(days=i)), 'captured_at': stamp(self.clock()),
+                 'value': 1000 if i == 1 else 100} for i in range(1, 101)]}
+        with patch('investment_engine.feeds.market', side_effect=market), patch('investment_engine.feeds.attention', side_effect=attention):
+            result = run(self.engine, continue_work=True)
+        self.assertEqual(order, ['market', 'attention', 'market'])
+        self.assertEqual(result['errors'], [])
+        self.assertEqual(len(result['registered']), 1)
+        prediction = self.engine.record(spec['id'])['predictions'][0]
+        self.assertGreater(prediction['reference_at'], prediction['event_available_at'])
+
+    def test_old_quote_waits_for_market_without_registering_prediction(self):
+        self.settings['max_candidates_per_day'] = 2
+        spec = {**spec_fixture('waiting-quote'), 'article': 'Gold'}
+        self.engine.discover(spec)
+        formal_test(self.engine, spec['id'], historical_fixture())
+        market = {'history': [], 'quote': {'at': stamp(self.clock() - timedelta(seconds=1)), 'price': 10},
+                  'splits': [], 'source': 'synthetic://market'}
+        attention = {'key': 'wikipedia:Gold', 'source': 'synthetic://wiki', 'rows': [
+            {'at': stamp(self.clock() - timedelta(days=i)), 'captured_at': stamp(self.clock()),
+             'value': 1000 if i == 1 else 100} for i in range(1, 101)]}
+        with patch('investment_engine.feeds.market', return_value=market), patch('investment_engine.feeds.attention', return_value=attention):
+            result = run(self.engine, continue_work=True)
+        self.assertEqual(result['registered'], [])
+        self.assertEqual(result['errors'], [])
+        self.assertIn({'signal_id': spec['id'], 'status': 'WAITING_FOR_CURRENT_QUOTE'}, result['research'])
+
+    def test_monitoring_and_predictions_continue_after_ninety_days(self):
+        self.validated()
+        first = self.predict('first')
+        self.clock.advance(days=1)
+        self.engine.record_price('SYNTH', self.clock(), 10.2, source='synthetic://endpoint')
+        self.clock.advance(days=90)
+        result = run(self.engine, offline=True, continue_work=True)
+        self.assertEqual(result['evaluated'], [first])
+        second = self.predict('later')
+        self.assertEqual(self.engine.record(self.spec['id'])['registered'], 2)
+        self.assertNotEqual(first, second)
+
+    def test_research_performance_includes_all_predictions(self):
+        self.validated()
+        self.predict('first')
+        self.outcome(win=False)
+        self.clock.advance(days=90)
+        self.predict('later')
+        self.outcome(win=True)
+        report = self.engine.record(self.spec['id'])
+        self.assertEqual(report['registered'], 2)
+        self.assertEqual(report['failures'], 1)
+        self.assertEqual(len(report['forecast_net_returns']), 2)
+        expected = (1 + report['forecast_net_returns'][0]) * (1 + report['forecast_net_returns'][1]) - 1
+        self.assertAlmostEqual(report['forecast_compounded_net_return'], expected)
+        self.assertAlmostEqual(report['buy_and_hold_net_return'], .018)
 
     def test_discovery_enforces_daily_cap_with_idempotent_retry(self):
         self.assertFalse(self.engine.discover(self.spec))
@@ -532,7 +581,6 @@ class SquadTests(unittest.TestCase):
         prediction = self.predict("subcent-idea")
         with self.assertRaisesRegex(ValueError, "Cannot afford"):
             portfolio.idea(prediction, self.snapshot(cash="0.006", holdings={"SYNTH": "1"}))
-        self.assertEqual(portfolio.balance()["cash"], "0.006")
 
     def test_renamed_pattern_rejects_previously_examined_price_windows(self):
         self.validated()
@@ -563,7 +611,7 @@ class SquadTests(unittest.TestCase):
                                  quote_at=self.clock(), reference_price=10, feature_value=1,
                                  due_at=self.clock() + timedelta(days=8), source="synthetic://test")
 
-    def test_purchase_uses_actual_cash_and_reserves_fixed_and_unit_fees(self):
+    def test_purchase_uses_supplied_cash_and_entry_fees(self):
         from decimal import Decimal
         self.settings["brokerage"].update(entry_fee_fixed="1", entry_fee_per_unit="0.02")
         self.qualified()
@@ -578,14 +626,14 @@ class SquadTests(unittest.TestCase):
         self.assertGreater((quantity + 1) * limit + 1 + (quantity + 1) * Decimal("0.02"), Decimal("1001"))
         self.assertEqual(portfolio.idea(prediction, self.snapshot(cash="1001")), idea)
 
-    def test_purchase_uses_supplied_account_cash_after_external_deposit(self):
+    def test_purchase_uses_current_request_cash(self):
         from decimal import Decimal
         self.qualified()
         prediction = self.predict("external-deposit-entry")
         idea = Portfolio(self.engine).idea(prediction, self.snapshot(cash="2000", holdings={"SYNTH": "20"}))
-        self.assertGreater(Decimal(idea["notional"]), Decimal(self.settings["starting_cash"]))
+        self.assertGreater(Decimal(idea["notional"]), Decimal("1000"))
         self.assertLessEqual(Decimal(idea["total_cash_required"]), Decimal("2000"))
-        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM fills").fetchone()[0], 0)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM events WHERE kind='human_fill_recorded'").fetchone()[0], 0)
 
     def test_missing_research_price_is_reported_without_repeated_permanent_events(self):
         self.validated()
@@ -611,7 +659,6 @@ class SquadTests(unittest.TestCase):
         self.assertIn("Split", self.engine.report(self.spec["id"])["corrections"][0]["reason"])
         with self.assertRaisesRegex(ValueError, "qualified signal"):
             Portfolio(self.engine).idea(prediction, self.snapshot())
-
 
 
 if __name__ == "__main__":

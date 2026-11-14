@@ -1,11 +1,11 @@
 ---
 name: squad-trades
-description: Prepare configured human-executed trade recommendations, record actual reported fills, and review exits for qualified investment discovery forecasts.
+description: Recommend next actions from user-supplied current portfolio, available cash and investment research.
 ---
-Follow [cloud-thread route](../squad-onboard/references/cloud.md#durable-child-task); run shared sibling `squad-onboard/scripts/main.py` in child task's cloud container. Human places orders. [Configuration](../squad-onboard/references/configuration.md) supplies actual budget/currency, broker, jurisdiction, costs, lots and resource limits.
+Follow [computer access](../squad-onboard/references/cloud.md#computer-and-command-access); run sibling `squad-onboard/scripts/main.py` on Dot computer. User executes orders.
 
-1. Perform squad-monitor's due outcome/delivery work before assessing advice. Review returned research corrections. Normalize actual portfolio snapshot per [portfolio](references/portfolio.md); run `knowledge context --portfolio PRIVATE_FILE --query TERMS`. Assess directed relationships, source dates, contradictions, missing symbols and truncation; retrieve fresh evidence when material facts changed. Explain buy/hold/sell/cash reasoning.
-2. Actual supplied cash and holdings control purchase sizing; reported fills retain execution history. Use `report --signal ID` for complete outcomes/corrections.
-3. For fresh qualified bullish forecast, run `idea --prediction ID --portfolio PRIVATE_FILE`. Explain symbol/venue, side/quantity, quote source/time/delay, limit/notional/currency, estimated entry fee and total cash, rationale/target/horizon, exit/invalidation review and skip conditions. User confirms broker spread, fees, settled cash, pending orders and restrictions.
-4. Record actual fills using `fill --file PRIVATE_FILE`; [trade commands](../squad-onboard/references/commands.md#trades) owns fields/idempotency. [Portfolio follow-up](references/portfolio.md#fills-and-exit-follow-up) uses exposed automation and run/message-history tools with readback/receipts for exit reviews.
-5. Handle alerts through squad-monitor, then `backup-due` per [storage](../squad-onboard/references/storage.md#full-cloud-backup). Python owns numerical sizing and reported fill records.
+1. Start from portfolio and available cash pasted with current request. [Portfolio](references/portfolio.md) owns input and advice flow.
+2. Apply squad-monitor's due outcome/delivery work; review research corrections. Run `knowledge context --portfolio PRIVATE_FILE --query TERMS`; inspect sources, dates, directed relationships, contradictions, missing symbols and truncation. Fetch fresh evidence where needed.
+3. Explain buy/hold/sell/cash choices against supplied account, user restrictions and evidence. `report --signal ID` supplies complete prediction history.
+4. For fresh qualified bullish forecast, `idea --prediction ID --portfolio PRIVATE_FILE` calculates affordable purchase from supplied cash, price, fees and lot size. Explain quantity, venue, quote time/source, price limit, total cash, rationale, horizon and review conditions. Treat multiple options as alternatives unless jointly sized within supplied cash.
+5. Remove completed private input files. Apply [backup procedure](../squad-onboard/references/storage.md#connected-backup-procedure) for research changes.

@@ -1,10 +1,10 @@
-# Forecast results and live trial
+# Forecast results
 
 [Historical method](../../squad-research/references/methodology.md) owns qualification. Passed untouched-history test qualifies idea for further investigation. Forward results preserve all wins, losses, pending attempts and corrections.
 
 ## Forecast endpoints
 
-Registration assigns current timestamp; due time equals registration plus saved duration. Measured feature exceeds frozen threshold. Fresh reference quote follows event availability; direction, target and costs match saved test plan.
+Registration assigns current timestamp; due time equals registration plus saved duration. Measured feature exceeds frozen threshold. Collect indicator first; obtain reference quote timestamp at/after evidence availability. Await suitable quote when market data older. Direction, target and costs match saved test plan.
 
 Resolve preceding same-signal endpoint before another forecast. New reference quote strictly follows previous realized endpoint. Event IDs unique; consecutive attention spikes form one episode. Report residual dependence between events.
 
@@ -12,14 +12,8 @@ Price adapter uses configured exchange calendar for actual session closing times
 
 Evaluate first actual close at/after due, within seven calendar days. Missing/late prices remain pending. Ingest corporate actions before evaluation. Split crossing forecast window invalidates signal. Late split or legacy overlapping/shared endpoint appends correction and retains original result. [Delivery](operations.md#claim-deliver-acknowledge) handles affected alerts.
 
-## Live trial
+## Performance review
 
-First genuine future prediction starts installation's initial 30-day trial. `trial status` returns every prediction, completed/pending/invalidated counts, forecast returns after costs, ordinary buy-and-hold comparison and reported fills. Forecast returns describe research observations; fills preserve actual user executions.
+`report --signal ID` shows every registered prediction, completed result, failure, pending endpoint and correction. Includes research returns after costs and ordinary buy-and-hold comparison across full prediction history. Compare measurement periods and unresolved predictions when assessing usefulness. User controls Dot's operation and schedules through [automations](../../squad-reconcile/references/deployment.md#scheduled-automations).
 
-At deadline, scheduled research/monitor collection and direct forecast registration stop for review. Report results and uncertainty, including unresolved predictions. User decides continuation based on performance. `trial review --file PRIVATE_FILE` records continue/stop, reason and actual user approval evidence. Continuation lasts explicitly selected 1–30 days. Retain every earlier period and result.
-
-When review required or stopped, disable this installation's research/monitor automations through [automation procedure](../../squad-reconcile/references/deployment.md#scheduled-automations). Reconciliation and backup remain available. User-approved continuation reuses same automations.
-
-## Tests
-
-Root Python tests cover untouched-history qualification, one-shot failures/retry rules, actual-close timing, complete future outcomes, claims/receipts, restart, trial deadline and reviewed continuation. Fixtures use temporary storage.
+Root Python tests cover untouched-history qualification, one-shot results, corrected input errors, actual-close timing, complete future outcomes, delivery receipts and restart. Fixtures use temporary storage.

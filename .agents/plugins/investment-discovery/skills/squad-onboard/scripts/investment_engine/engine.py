@@ -1,9 +1,10 @@
 import json
+import math
 import secrets
 from datetime import timedelta
 from zoneinfo import ZoneInfo
 
-from .backtesting import prepare_plan, validate
+from .backtesting import prepare_plan, test_rows, validate
 from .configuration import instrument, reject_secrets
 from .messages import alert_message
 from .ledger import Store
@@ -120,20 +121,21 @@ class Engine:
                 raise ValueError('Freeze development rule and untouched test windows with prepare-test first')
             plan, spec = json.loads(saved[0]), self.store.spec(signal_id)
             try:
+                rows = test_rows(dataset, spec, plan, self.store.clock())
                 if dataset.get('synthetic') and self.store.mode != 'synthetic':
                     raise ValueError('Synthetic evidence prohibited in production')
                 previous = self.store.db.execute("""SELECT d.data FROM trials t JOIN specs s ON s.id=t.signal_id
                   JOIN datasets d ON d.hash=t.dataset_hash WHERE json_extract(s.data,'$.symbol')=?""", (spec['symbol'],))
                 for old in previous:
-                    rows = json.loads(old[0]).get('rows', [])
-                    for row in rows:
-                        start, end = instant(row['entry_at']), instant(row['exit_at'])
-                        if any(instant(window['entry_at']) <= end and start <= instant(window['exit_at']) for window in plan['test_windows']):
+                    for old_row in json.loads(old[0]).get('rows', []):
+                        start, end = instant(old_row['entry_at']), instant(old_row['exit_at'])
+                        if any(instant(w['entry_at']) <= end and start <= instant(w['exit_at']) for w in plan['test_windows']):
                             raise ValueError('Test price windows already consumed for this instrument; supply untouched later history')
-                result = validate(dataset, spec, plan, self.store.clock())
             except (ValueError, KeyError, TypeError) as exc:
-                result = {'passed': False, 'reasons': [str(exc)], 'rule': plan['rule'],
-                          'trial_number': plan['trial_number'], 'alpha': plan['alpha']}
+                self.store.event('test_submission_invalid', signal_id, error=str(exc),
+                                 submission_hash=digest(json.dumps(dataset, sort_keys=True)))
+                return {'tested': False, 'error': str(exc), 'trial_number': plan['trial_number']}
+            result = validate(dataset, spec, plan, self.store.clock(), rows=rows)
             self.store.db.execute('INSERT OR IGNORE INTO datasets VALUES(?,?)', (digest(dataset), canonical(dataset)))
             self.store.db.execute('INSERT INTO trials(id,signal_id,at,dataset_hash,data) VALUES(?,?,?,?,?)',
                                   (plan['trial_number'], signal_id, stamp(self.store.clock()), digest(dataset), canonical(result)))
@@ -197,10 +199,6 @@ class Engine:
             raise ValueError("Quote too stale to register a live forecast")
         price = finite(reference_price, positive=True)
         feature = finite(feature_value)
-        from .trial import trial_status
-        period = trial_status(self)
-        if period['status'] in {'review_required', 'stopped'}:
-            raise ValueError('Live trial ended; review performance and record user decision before continuing')
         with self.store.transaction():
             if self.store.state(signal_id) not in {"FORWARD_TESTING", "QUALIFIED", "ALERTED"}:
                 raise ValueError("Historical validation must pass before live registration")
@@ -230,8 +228,6 @@ class Engine:
                     "success_criteria": "Signed endpoint return minus frozen round-trip cost >= target_return",
                     "endpoint_rule": "First observed market close at or after due_at, no more than 7 calendar days later",
                     "synthetic": self.store.mode == "synthetic"}
-            if period['status'] == 'not_started':
-                self.store.event('live_trial_started', started_at=stamp(now), ends_at=stamp(now + timedelta(days=30)), days=30)
             self.store.db.execute("INSERT INTO predictions VALUES(?,?,?,?,?,?)",
                                   (prediction_id, signal_id, event_id, stamp(now), stamp(due), canonical(data)))
             self.store.event("prediction_registered", signal_id, prediction_id=prediction_id,
@@ -333,9 +329,21 @@ class Engine:
                                 "outcome": json.loads(row["outcome"]) if row["outcome"] else None})
         successes = sum(p["success"] is True and p["outcome_valid"] for p in predictions)
         evaluated = sum(p["outcome_valid"] for p in predictions)
+        returns = [p['outcome']['net_return'] for p in predictions if p['outcome_valid']]
+        buy_and_hold = None
+        if predictions:
+            first = predictions[0]
+            endpoint = self.store.db.execute("""SELECT data FROM prices WHERE symbol=? AND kind='close'
+              AND market_at>=? AND market_at<=? ORDER BY market_at DESC LIMIT 1""",
+              (self.store.spec(signal_id)['symbol'], first['reference_at'], stamp(self.store.clock()))).fetchone()
+            if endpoint:
+                buy_and_hold = json.loads(endpoint[0])['price'] / first['reference_price'] - 1 - first['cost_bps'] / 10000
         return {"registered": len(predictions), "evaluated": evaluated, "successes": successes,
                 "failures": evaluated - successes, "pending": sum(p["outcome"] is None for p in predictions),
                 "invalidated": len(invalid),
+                "forecast_net_returns": returns,
+                "forecast_compounded_net_return": math.prod(1 + value for value in returns) - 1 if returns else None,
+                "buy_and_hold_net_return": buy_and_hold,
                 "hit_rate_wilson_95": wilson(successes, evaluated), "predictions": predictions}
 
     def report(self, signal_id):
@@ -354,7 +362,7 @@ class Engine:
                 "confidence_and_limitations": spec["limitations"] + [
                     "Qualification means historical evidence worth further investigation",
                     "Report all attempts; Wilson interval is descriptive and assumes independence",
-                    "Research forecasts and user-confirmed brokerage fills are separate records"],
+                    "Forecast returns describe research predictions"],
                 "synthetic": self.store.mode == "synthetic"}
 
     def claim(self, alert_id):

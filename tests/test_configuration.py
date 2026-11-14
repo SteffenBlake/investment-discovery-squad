@@ -1,5 +1,4 @@
 import copy
-import json
 import os
 import sqlite3
 import tempfile
@@ -10,9 +9,7 @@ from unittest.mock import patch
 
 from investment_engine.cli import execute, parser
 from investment_engine.configuration import configuration_template, build_runtime_settings, validate_installation
-from tests.fixtures import DemoClock
 from investment_engine.engine import Engine
-from investment_engine.portfolio import Portfolio
 from investment_engine.provisioning import FROZEN, adopt, open_store
 from investment_engine.backups import snapshot
 from investment_engine.ledger import Store
@@ -22,7 +19,7 @@ from tests.fixtures import completed_installation, native_environment
 
 class ConfigurationTests(unittest.TestCase):
     def setUp(self):
-        remote = patch('investment_engine.drive.Drive.list', return_value=[])
+        remote = patch('investment_engine.drive.read_inventory', return_value=[])
         remote.start()
         self.addCleanup(remote.stop)
         self.temp = tempfile.TemporaryDirectory()
@@ -50,7 +47,7 @@ class ConfigurationTests(unittest.TestCase):
             validate_installation(template)
 
     def test_init_refuses_empty_databases_when_remote_backup_exists(self):
-        with patch('investment_engine.drive.Drive.list', return_value=[{'id': 'existing-backup'}]):
+        with patch('investment_engine.drive.read_inventory', return_value=[{'id': 'existing-backup', 'name': 'recovery.backup.zip'}]):
             with self.assertRaisesRegex(ValueError, 'Existing Drive backup'):
                 self.cli('init')
         for key in ('database_path', 'knowledge_path'):
@@ -59,7 +56,7 @@ class ConfigurationTests(unittest.TestCase):
     def test_init_preserves_existing_ledger_when_research_database_missing(self):
         initial = self.cli('init')
         Path(self.installation['storage']['knowledge_path']).unlink()
-        with patch('investment_engine.drive.Drive.list', return_value=[{'id': 'existing-backup'}]):
+        with patch('investment_engine.drive.read_inventory', return_value=[{'id': 'existing-backup', 'name': 'recovery.backup.zip'}]):
             with self.assertRaisesRegex(ValueError, 'Existing Drive backup'):
                 self.cli('init')
         self.assertFalse(Path(self.installation['storage']['knowledge_path']).exists())
@@ -87,23 +84,6 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "shared validation"):
             validate_installation(self.installation)
 
-    def test_arbitrary_exchange_currency_budget_and_fractional_lots(self):
-        installation = completed_installation(self.folder, currency="EUR", cash="2575.00", timezone="Europe/Berlin", lot="0.25")
-        store = open_store(build_runtime_settings(installation), initialize=True)
-        try:
-            clock = DemoClock()
-            store.clock = clock
-            engine = Engine(store, build_runtime_settings(installation))
-            portfolio = Portfolio(engine)
-            portfolio.fill("actual-report", "SYNTH", "buy", "0.75", "20", "1", clock())
-            reported = json.loads(store.db.execute("SELECT data FROM fills").fetchone()[0])
-            self.assertEqual(reported["currency"], "EUR")
-            self.assertEqual(reported["quantity"], "0.75")
-            self.assertEqual(reported["fee"], "1")
-            with self.assertRaisesRegex(ValueError, "lot size"):
-                portfolio.fill("bad-lot", "SYNTH", "buy", "0.1", "20", "0", clock())
-        finally:
-            store.close()
 
     def test_quote_currency_mismatch_rejected_without_assumed_fx(self):
         engine_settings = build_runtime_settings(self.installation)
@@ -128,12 +108,27 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(store.identity, identity)
         store.close()
 
-    def test_budget_change_cannot_recalculate_existing_cash(self):
+    def test_research_cost_change_preserves_frozen_history(self):
         store = open_store(build_runtime_settings(self.installation), initialize=True)
         store.close()
-        self.installation["starting_cash"] = "5000"
+        self.installation["round_trip_cost_bps"] = 50
         with self.assertRaisesRegex(ValueError, "Frozen"):
             open_store(build_runtime_settings(self.installation))
+
+    def test_existing_research_opens_with_retired_cash_metadata(self):
+        settings = build_runtime_settings(self.installation)
+        store = open_store(settings, initialize=True)
+        identity = store.identity
+        original = {key: settings[key] for key in FROZEN}
+        original['starting_cash'] = '1000'
+        store.db.execute("UPDATE meta SET value=? WHERE key='frozen_settings'", (canonical(original),))
+        store.close()
+        for initialize in (False, True):
+            reopened = open_store(settings, initialize=initialize)
+            try:
+                self.assertEqual(reopened.identity, identity)
+            finally:
+                reopened.close()
 
     def test_newer_schema_blocks_without_silent_migration(self):
         store = open_store(build_runtime_settings(self.installation), initialize=True)
@@ -158,7 +153,7 @@ class ConfigurationTests(unittest.TestCase):
         legacy.close()
         with self.assertRaisesRegex(ValueError, "unbound"):
             open_store(cfg, initialize=True)
-        result = adopt(cfg, cfg["base_currency"], cfg["starting_cash"])
+        result = adopt(cfg, cfg["base_currency"])
         self.assertTrue(Path(result["backup"]).exists())
         self.assertEqual(Path(result["backup"]).stat().st_mode & 0o777, 0o600)
         store = open_store(cfg)
@@ -191,22 +186,6 @@ class ConfigurationTests(unittest.TestCase):
         finally:
             store.close()
 
-    def test_legacy_incompatible_trade_data_blocks_adoption_without_rebinding(self):
-        cfg = build_runtime_settings(self.installation)
-        legacy = Store(cfg["storage"]["database_path"], create=True)
-        legacy.db.execute("INSERT INTO meta VALUES('frozen_settings',?)",
-                          (canonical({key: cfg[key] for key in FROZEN}),))
-        legacy.db.execute("INSERT INTO ideas VALUES('old-idea','2025-01-01',?)",
-                          (canonical({"notional_old_currency": "100", "expires_at": "2025-01-02"}),))
-        legacy.close()
-        with self.assertRaisesRegex(ValueError, "explicit migration"):
-            adopt(cfg, cfg["base_currency"], cfg["starting_cash"])
-        connection = sqlite3.connect(cfg["storage"]["database_path"])
-        try:
-            self.assertIsNone(connection.execute("SELECT value FROM meta WHERE key='profile_id'").fetchone())
-            self.assertEqual(connection.execute("SELECT COUNT(*) FROM ideas").fetchone()[0], 1)
-        finally:
-            connection.close()
 
     def test_configuration_revisions_saved_once_per_content_hash(self):
         for _ in range(2):
@@ -246,7 +225,7 @@ class ConfigurationTests(unittest.TestCase):
                 identity = legacy.identity
                 legacy.close()
                 with self.assertRaisesRegex(ValueError, "currency differs"):
-                    adopt(cfg, "USD", cfg["starting_cash"])
+                    adopt(cfg, "USD")
                 reader = sqlite3.connect(cfg["storage"]["database_path"])
                 try:
                     self.assertEqual(reader.execute("SELECT * FROM meta").fetchall(), [tuple(r) for r in before])

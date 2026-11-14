@@ -13,7 +13,7 @@ from tests.fixtures import completed_installation, native_environment
 
 class NativeConfigurationTests(unittest.TestCase):
     def setUp(self):
-        remote = patch('investment_engine.drive.Drive.list', return_value=[])
+        remote = patch('investment_engine.drive.read_inventory', return_value=[])
         remote.start()
         self.addCleanup(remote.stop)
         self.temp = tempfile.TemporaryDirectory()
@@ -38,7 +38,7 @@ class NativeConfigurationTests(unittest.TestCase):
         value = dict(self.installation, oauth_refresh_token='never-store-this')
         with self.assertRaises(ValueError):
             validate_installation(value)
-        with patch.dict(os.environ, {**native_environment(self.installation), 'SQUAD_GOOGLE_REFRESH_TOKEN': 'runtime-only-token'}, clear=True):
+        with patch.dict(os.environ, {**native_environment(self.installation), 'BROKER_API_TOKEN': 'runtime-only-token'}, clear=True):
             loaded = load_configuration()
             self.assertNotIn('runtime-only-token', json.dumps(loaded))
             self.assertEqual(redact('failed runtime-only-token'), 'failed [REDACTED]')
@@ -52,7 +52,7 @@ class NativeConfigurationTests(unittest.TestCase):
 
     def test_runtime_secret_in_ordinary_configuration_text_rejected(self):
         self.installation['brokerage']['constraints'] = 'Accidental copied credential: never-copy-this-token'
-        with patch.dict(os.environ, {**native_environment(self.installation), 'SQUAD_GOOGLE_REFRESH_TOKEN': 'never-copy-this-token'}, clear=True):
+        with patch.dict(os.environ, {**native_environment(self.installation), 'BROKER_API_TOKEN': 'never-copy-this-token'}, clear=True):
             with self.assertRaisesRegex(ValueError, 'credentials cannot be copied'):
                 load_configuration()
 

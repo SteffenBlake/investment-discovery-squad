@@ -3,7 +3,7 @@
 import math
 from statistics import mean
 
-from .util import digest, finite, instant, stamp, wilson
+from .util import canonical, digest, finite, instant, stamp, wilson
 
 
 def history_requirements(settings, holdout_rows, trial_number):
@@ -15,10 +15,19 @@ def history_requirements(settings, holdout_rows, trial_number):
 
 
 def normalized_rows(dataset, spec, now):
-    if not dataset.get('source') or not dataset.get('limitations'):
-        raise ValueError('Dataset needs source provenance and limitations')
+    if not isinstance(dataset, dict):
+        raise ValueError('Dataset must be an object')
+    canonical(dataset)
+    if not isinstance(dataset.get('source'), str) or not dataset['source'].strip():
+        raise ValueError('Dataset needs source provenance')
+    if not isinstance(dataset.get('limitations'), list) or not dataset['limitations'] or any(not isinstance(item, str) or not item.strip() for item in dataset['limitations']):
+        raise ValueError('Dataset needs nonempty text limitations')
+    if not isinstance(dataset.get('rows'), list) or any(not isinstance(row, dict) for row in dataset['rows']):
+        raise ValueError('Dataset rows must be a list of objects')
     previous_exit, events, result = None, set(), []
-    for row in dataset.get('rows', []):
+    for row in dataset['rows']:
+        if any(not isinstance(row.get(key), str) for key in ('available_at', 'entry_at', 'exit_at')):
+            raise ValueError('Row timestamps must be strings with UTC offsets')
         available, entry, end = (instant(row[key]) for key in ('available_at', 'entry_at', 'exit_at'))
         if not available < entry < end <= instant(now):
             raise ValueError('Look-ahead/future outcome: require available_at < entry_at < exit_at <= now')
@@ -70,11 +79,19 @@ def prepare_plan(development, spec, windows, settings, number, now):
             'limitations': development['limitations']}
 
 
-def validate(dataset, spec, plan, now):
+def test_rows(dataset, spec, plan, now):
     rows = normalized_rows(dataset, spec, now)
     windows = [{key: row[key] for key in ('event_id', 'entry_at', 'exit_at')} for row in rows]
     if windows != plan['test_windows']:
         raise ValueError('Test data must match every frozen window exactly, in order')
+    if dataset.get('availability_verified') is not True or not dataset.get('availability_evidence'):
+        raise ValueError('Original historical availability evidence required')
+    return rows
+
+
+def validate(dataset, spec, plan, now, *, rows=None):
+    rows = test_rows(dataset, spec, plan, now) if rows is None else rows
+    windows = plan['test_windows']
     sign = 1 if plan['rule']['direction'] == 'up' else -1
     returns = [sign * row['return'] - plan['round_trip_cost_bps'] / 10000 for row in rows]
     mask = [row['feature'] > plan['rule']['threshold'] for row in rows]
@@ -86,10 +103,7 @@ def validate(dataset, spec, plan, now):
         p_value = sum(value >= observed - 1e-12 for value in null) / len(null)
     else:
         p_value = 1.0
-    verified = dataset.get('availability_verified') is True and bool(dataset.get('availability_evidence'))
     reasons = []
-    if not verified:
-        reasons.append('Original historical availability evidence required')
     if len(chosen) < plan['min_test_events']:
         reasons.append('Too few triggered test events')
     if observed <= 0 or observed <= baseline:
@@ -98,7 +112,7 @@ def validate(dataset, spec, plan, now):
         reasons.append('Failed correction for registered hypotheses')
     successes = sum(value >= spec['target_return'] for value in chosen)
     return {'passed': not reasons, 'reasons': reasons, 'dataset_hash': digest(dataset), 'source': dataset['source'],
-            'synthetic': bool(dataset.get('synthetic')), 'availability_verified': verified,
+            'synthetic': bool(dataset.get('synthetic')), 'availability_verified': True,
             'availability_evidence': dataset.get('availability_evidence'), 'rule': plan['rule'],
             'train_samples': plan['development_samples'], 'test_samples': len(rows), 'test_events': len(chosen),
             'train_last_exit': plan['development_last_exit'], 'test_first_entry': rows[0]['entry_at'],

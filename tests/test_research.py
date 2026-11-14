@@ -37,15 +37,27 @@ class HistoricalResearchTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             self.store.db.execute('DELETE FROM test_plans')
 
-    def test_failed_or_changed_test_consumes_only_shot(self):
+    def test_broken_input_can_be_repaired_against_same_plan(self):
         holdout = prepare_test_fixture(self.engine, self.spec['id'], historical_fixture())
-        holdout['rows'] = holdout['rows'][:-1]
-        result = self.engine.backtest(self.spec['id'], holdout)
-        self.assertFalse(result['passed'])
-        self.assertEqual(self.store.state(self.spec['id']), 'REJECTED')
+        damaged = {**holdout, 'rows': holdout['rows'][:-1]}
+        result = self.engine.backtest(self.spec['id'], damaged)
+        self.assertFalse(result['tested'])
+        self.assertEqual(self.store.state(self.spec['id']), 'DISCOVERED')
+        self.assertEqual(self.store.db.execute('SELECT COUNT(*) FROM trials').fetchone()[0], 0)
+        self.assertTrue(self.engine.backtest(self.spec['id'], holdout)['passed'])
         with self.assertRaisesRegex(ValueError, 'One test'):
             self.engine.backtest(self.spec['id'], holdout)
-        self.assertEqual(self.store.db.execute('SELECT COUNT(*) FROM trials').fetchone()[0], 1)
+
+    def test_invalid_number_records_error_and_allows_corrected_input(self):
+        holdout = prepare_test_fixture(self.engine, self.spec['id'], historical_fixture())
+        feature = holdout['rows'][-1]['feature']
+        holdout['rows'][-1]['feature'] = float('nan')
+        result = self.engine.backtest(self.spec['id'], holdout)
+        self.assertFalse(result['tested'])
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM events WHERE kind='test_submission_invalid'").fetchone()[0], 1)
+        self.assertEqual(self.store.db.execute('SELECT COUNT(*) FROM trials').fetchone()[0], 0)
+        holdout['rows'][-1]['feature'] = feature
+        self.assertTrue(self.engine.backtest(self.spec['id'], holdout)['passed'])
 
     def test_related_retry_requires_new_input_and_operation_and_later_holdout(self):
         holdout = prepare_test_fixture(self.engine, self.spec['id'], historical_fixture())
@@ -91,15 +103,15 @@ class HistoricalResearchTests(unittest.TestCase):
 
     def test_empty_initialization_checks_backups_and_preserves_target(self):
         installation = completed_installation(self.temp.name)
-        for backups in [[{'id': 'existing'}], []]:
-            with patch('investment_engine.drive.Drive.list', return_value=backups):
+        for backups in [[{'id': 'existing', 'name': 'recovery.backup.zip'}], []]:
+            with patch('investment_engine.drive.read_inventory', return_value=backups):
                 if backups:
                     with self.assertRaisesRegex(ValueError, 'Existing Drive backup'):
                         check_initialization_target(installation)
                 else:
                     check_initialization_target(installation)
         self.assertFalse(Path(installation['storage']['database_path']).exists())
-        with patch('investment_engine.drive.Drive.list', side_effect=ValueError('Authorization required')):
+        with patch('investment_engine.drive.read_inventory', side_effect=ValueError('Authorization required')):
             with self.assertRaisesRegex(ValueError, 'Authorization'):
                 check_initialization_target(installation)
         self.assertFalse(Path(installation['storage']['knowledge_path']).exists())

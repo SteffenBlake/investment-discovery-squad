@@ -26,8 +26,10 @@ def parser():
     p = argparse.ArgumentParser(description="Dot-ready investment discovery; recommendations only")
     p.add_argument("--version", action="version", version=__version__)
     sub = p.add_subparsers(dest="command", required=True)
-    for name in ("init", "doctor", "status", "portfolio", "alerts", "storage-plan", "onboarding", "backup-due", "setup-runtime"):
-        sub.add_parser(name)
+    for name in ("init", "doctor", "status", "alerts", "storage-plan", "onboarding", "backup-due", "setup-runtime"):
+        q = sub.add_parser(name)
+        if name in {'init', 'backup-due'}:
+            q.add_argument('--inventory', help='Private JSON from connected Drive folder inventory')
     for name in ("run", "research"):
         q = sub.add_parser(name)
         q.add_argument("--offline", action="store_true")
@@ -35,7 +37,9 @@ def parser():
         q.add_argument("--preflight", action="store_true", help="Initial collection on an empty forecast ledger")
     sub.add_parser("export").add_argument("--output")
     q = sub.add_parser("backup")
-    q.add_argument("action", nargs="?", choices=["cloud", "snapshot", "list", "verify", "restore"], default="cloud")
+    q.add_argument("action", nargs="?", choices=["cloud", "started", "retry", "accept", "snapshot", "list", "verify", "restore"], default="cloud")
+    q.add_argument('--inventory')
+    q.add_argument('--file', help='Private connector receipt, retry evidence or downloaded recovery ZIP')
     q.add_argument("--output")
     q.add_argument("--file-id")
     q.add_argument("--expected-identity")
@@ -47,15 +51,12 @@ def parser():
     q.add_argument("--id")
     q.add_argument("--type", choices=["Claim", "Entity", "Source", "Batch"], default="Claim")
     q.add_argument("--symbols", help="Comma-separated symbols")
-    q.add_argument("--portfolio", help="Save supplied portfolio snapshot and return related research")
+    q.add_argument("--portfolio", help="Return research for supplied current portfolio")
     q.add_argument("--limit", type=int, default=15)
     q.add_argument("--hops", type=int, default=2)
-    for name in ("discover", "forecast", "fill", "prices"):
+    for name in ("discover", "forecast", "prices"):
         sub.add_parser(name).add_argument("--file", required=True)
     sub.add_parser('prepare-test').add_argument('--file', required=True)
-    q = sub.add_parser('trial')
-    q.add_argument('action', choices=['status', 'review'])
-    q.add_argument('--file', help='Private JSON containing performance review and user decision')
     q = sub.add_parser("backtest")
     q.add_argument("--signal", required=True)
     q.add_argument("--dataset", required=True)
@@ -75,7 +76,6 @@ def parser():
         q.add_argument("--receipt" if name == "ack" else "--confirmed-not-sent", required=True)
     q = sub.add_parser("adopt")
     q.add_argument("--confirm-currency", required=True)
-    q.add_argument("--confirm-starting-cash", required=True)
     q = sub.add_parser("deployment")
     q.add_argument("action", choices=["sync"])
     return p
@@ -107,7 +107,7 @@ def _execute(args):
         return {"configuration_template": configuration_template(),
                 "guide": str(Path(__file__).resolve().parents[2] / "references/configuration.md"), "storage_guide": str(Path(__file__).resolve().parents[2] / "references/storage.md"),
                 "database_created": False, "environment_variables": {key: {"path": ".".join(value[0]), "type": value[1]} for key, value in environment_fields().items()},
-                "note": "Required cloud workflow: individual native variables, vault-bound Google refresh credentials, reviewed Ladybug/SQLite storage and verified Drive recovery"}
+                "note": "Follow squad-onboard checklist: Dot computer, project .env variables, connected Drive inventory/uploads and reviewed private storage"}
     if args.command == "doctor" and not has_configuration():
         return {"repo_ready": True, "operational_ready": False, "stage": "ONBOARDING_REQUIRED",
                 "database_created": False, "guide": str(Path(__file__).resolve().parents[2] / "references/setup.md")}
@@ -116,24 +116,22 @@ def _execute(args):
         return storage_plan(installation)
     settings = build_runtime_settings(installation)
     if args.command == "adopt":
-        return adopt(settings, args.confirm_currency, args.confirm_starting_cash)
+        return adopt(settings, args.confirm_currency)
     if args.command == "backup" and args.action in {"list", "verify", "restore"}:
-        from .drive import Drive
-        drive = Drive(settings)
         if args.action == "list":
-            return {"backups": drive.list()}
-        if not args.file_id or not args.expected_identity:
-            raise ValueError("Specify actual --file-id and --expected-identity; never select or relabel a ledger implicitly")
+            from .drive import read_inventory, backup_files
+            return {"backups": backup_files(read_inventory(settings, args.inventory))}
+        if not args.file or not args.expected_identity:
+            raise ValueError("Specify downloaded --file and original --expected-identity")
         if args.action == "restore":
-            return backups.restore(settings, args.file_id, args.expected_identity, drive=drive)
+            if not args.file_id:
+                raise ValueError('Specify original Drive --file-id for subsequent backup updates')
+            return backups.restore(settings, args.file, args.expected_identity, file_id=args.file_id)
         import tempfile
-        import hashlib
-        metadata, data = drive.download(args.file_id, expected_identity=args.expected_identity)
         with tempfile.TemporaryDirectory(prefix="squad-verify-") as folder:
-            path = Path(folder) / "download.zip"
-            path.write_bytes(data)
+            path = Path(args.file)
             manifest = backups.verify_archive(path, settings, args.expected_identity, Path(folder) / "state")
-        return {"verified": True, "file_id": args.file_id, "sha256": hashlib.sha256(data).hexdigest(), "setup_identity": manifest["setup_identity"], "restore_tested": True}
+        return {"verified": True, "file_id": args.file_id, "sha256": backups.file_hash(args.file), "setup_identity": manifest["setup_identity"], "restore_tested": True}
     if args.command == "deployment":
         from .deployment import deployment_command
         return deployment_command(args, settings)
@@ -141,7 +139,7 @@ def _execute(args):
         return {"repo_ready": True, "operational_ready": False, "stage": "DATABASE_NOT_INITIALIZED",
                 "database_created": False, "next": "Review storage-plan, then run init"}
     if args.command == 'init':
-        check_initialization_target(settings)
+        check_initialization_target(settings, args.inventory)
     store = open_store(settings, initialize=args.command == "init")
     engine = Engine(store, settings)
     try:
@@ -151,7 +149,7 @@ def _execute(args):
                 graph_status = graph.status()
             return {"initialized": str(store.path), "database_path": str(store.path.resolve()),
                     "setup_identity": store.identity, "mode": store.mode, "monitoring_active": False, "knowledge": graph_status,
-                    "next": "Follow squad-onboard references/setup.md for cloud-thread checks, schedules and setup confirmation message"}
+                    "next": "Follow squad-onboard references/setup.md for Dot-computer checks, automations and setup confirmation message"}
         if command == "knowledge":
             if args.action == "context":
                 from .briefing import portfolio_context
@@ -198,13 +196,6 @@ def _execute(args):
         if command == 'prepare-test':
             plan = read_json(args.file)
             return engine.prepare_test(**plan)
-        if command == 'trial':
-            from .trial import trial_status, review_trial
-            if args.action == 'review':
-                if not args.file:
-                    raise ValueError('trial review requires --file')
-                return review_trial(engine, **read_json(args.file))
-            return trial_status(engine)
         if command == "backtest":
             return engine.backtest(args.signal, read_json(args.dataset))
         if command == "forecast":
@@ -228,10 +219,6 @@ def _execute(args):
         if command == "release":
             engine.release(args.alert, args.token, args.confirmed_not_sent)
             return {"released": True}
-        if command == "portfolio":
-            return Portfolio(engine).balance()
-        if command == "fill":
-            return {"recorded": Portfolio(engine).fill(**read_json(args.file))}
         if command == "idea":
             return Portfolio(engine).idea(args.prediction, read_json(args.portfolio))
         if command == "export":
@@ -243,20 +230,26 @@ def _execute(args):
                 target = absolute_path(args.output, "backup destination")
                 if args.action == "snapshot":
                     return {"archive": str(target), "manifest": backups.snapshot(settings, store, target), "cloud_verified": False}
-                raise ValueError("--output is only for backup snapshot; production recovery requires backup cloud")
+                raise ValueError("--output is for backup snapshot; --file supplies connector receipt or downloaded recovery ZIP")
             if args.action == "snapshot":
                 raise ValueError("backup snapshot requires --output NEW_ABSOLUTE_PATH")
-            return backups.cloud_backup(settings, store, force=args.force)
+            if args.action == 'started':
+                return backups.start_upload(settings, store)
+            if args.action in {'accept', 'retry'}:
+                if not args.file:
+                    raise ValueError('Specify private connector receipt or retry evidence with --file')
+                action = backups.accept_upload if args.action == 'accept' else backups.retry_upload
+                return action(settings, store, read_json(args.file))
+            return backups.cloud_backup(settings, store, inventory=args.inventory, force=args.force)
         if command == "backup-due":
-            return backups.cloud_backup(settings, store)
+            return backups.cloud_backup(settings, store, inventory=args.inventory)
         if command == "status":
             return {"mode": store.mode, "setup_identity": store.identity, "database_path": str(store.path.resolve()),
                     "signals": [dict(r) for r in store.db.execute("SELECT * FROM signals ORDER BY id")],
                     "predictions": store.db.execute("SELECT COUNT(*) FROM predictions").fetchone()[0],
                     "outcomes": store.db.execute("SELECT COUNT(*) FROM outcomes").fetchone()[0],
                     "outbox": [dict(r) for r in store.db.execute("SELECT id,status FROM outbox")],
-                    "last_run": next((dict(r) for r in store.db.execute("SELECT at,kind FROM events WHERE kind='run_completed' ORDER BY seq DESC LIMIT 1")), None),
-                    "portfolio": Portfolio(engine).balance()}
+                    "last_run": next((dict(r) for r in store.db.execute("SELECT at,kind FROM events WHERE kind='run_completed' ORDER BY seq DESC LIMIT 1")), None)}
         raise ValueError("Unknown command")
     finally:
         store.close()
@@ -269,6 +262,8 @@ def main(argv=None):
         print(json.dumps(result, indent=2, allow_nan=False))
         if isinstance(result, dict) and result.get("errors"):
             return_code = 2
+        elif isinstance(result, dict) and result.get('tested') is False:
+            return_code = 1
         else:
             return_code = 0
     except (ValueError, KeyError, TypeError, OSError, RuntimeError, sqlite3.Error) as exc:

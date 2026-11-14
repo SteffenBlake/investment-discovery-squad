@@ -1,4 +1,4 @@
-"""One cloud deployment, configured only through individual native environment variables."""
+"""One cloud deployment, configured only through explicitly loaded environment variables."""
 
 import copy
 import json
@@ -18,8 +18,7 @@ _CONFIGURATION_TEMPLATE = {'schema_version': 2,
  'timezone': None,
  'jurisdiction': None,
  'base_currency': None,
- 'starting_cash': None,
- 'max_trade_ideas_per_day': None,
+ 'risk_preferences': None,
  'max_candidates_per_day': None,
  'round_trip_cost_bps': None,
  'brokerage': {'name': None, 'execution_mode': 'human', 'constraints': None,
@@ -49,7 +48,7 @@ _CONFIGURATION_TEMPLATE = {'schema_version': 2,
 # Architecture is fixed, not another onboarding choice.
 _FIXED_FIELDS = {'schema_version', 'runtime.kind', 'storage.backend', 'storage.cloud_backup.provider',
                  'brokerage.execution_mode', 'gitops.update_policy'}
-RUNTIME_ENV = {"SQUAD_REPO", "SQUAD_PYTHON", "SQUAD_TASK_KEY", "SQUAD_LADYBUG_HOME"}
+RUNTIME_ENV = {"SQUAD_REPO", "SQUAD_PYTHON", "SQUAD_LADYBUG_HOME"}
 
 
 def configuration_template():
@@ -89,15 +88,15 @@ def absolute_path(value, label):
 
 
 def validate_installation(installation, *, require_storage_acceptance=True):
-    allowed = {"schema_version", "profile_id", "timezone", "jurisdiction", "base_currency", "starting_cash",
-               "max_trade_ideas_per_day", "max_candidates_per_day", "round_trip_cost_bps",
+    allowed = {"schema_version", "profile_id", "timezone", "jurisdiction", "base_currency", "risk_preferences",
+               "max_candidates_per_day", "round_trip_cost_bps",
                "brokerage", "worker", "spending", "notification", "instruments", "research_universe",
                "storage", "schedules", "gitops", "runtime"}
     if set(installation) - allowed:
         raise ValueError("Unknown installation fields; shared validation rules belong in method settings")
     reject_secrets(installation)
     if installation.get("schema_version") != 2:
-        raise ValueError("Configuration schema 2 required; run onboarding for the required native variables. Existing state is preserved")
+        raise ValueError("Configuration schema 2 required; run onboarding for the required environment variables. Existing state is preserved")
     template = configuration_template()
     def check_objects(value, expected, prefix=''):
         for key, shape in expected.items():
@@ -111,13 +110,11 @@ def validate_installation(installation, *, require_storage_acceptance=True):
         raise ValueError("profile_id must be a lowercase identifier")
     ZoneInfo(_text(installation.get("timezone"), "timezone"))
     _text(installation.get("jurisdiction"), "jurisdiction (user-supplied, never inferred)")
+    _text(installation.get('risk_preferences'), 'risk_preferences (user-reviewed loss tolerance and restrictions)')
     if not re.fullmatch(r"[A-Z]{3}", _text(installation.get("base_currency"), "base_currency")):
         raise ValueError("base_currency must be a three-letter currency code")
-    if installation.get("starting_cash") is None or money(installation["starting_cash"]) <= 0:
-        raise ValueError("Onboarding required: positive starting_cash")
-    for key in ("max_trade_ideas_per_day", "max_candidates_per_day"):
-        if type(installation.get(key)) is not int or installation[key] < 1:
-            raise ValueError(f"Onboarding required: positive integer {key}")
+    if type(installation.get("max_candidates_per_day")) is not int or installation["max_candidates_per_day"] < 1:
+        raise ValueError("Onboarding required: positive integer max_candidates_per_day")
     if installation.get("round_trip_cost_bps") is None or not 0 <= finite(installation["round_trip_cost_bps"]) < 10000:
         raise ValueError("Onboarding required: realistic round_trip_cost_bps")
     brokerage = installation.get("brokerage", {})
@@ -162,7 +159,7 @@ def validate_installation(installation, *, require_storage_acceptance=True):
         raise ValueError("Research knowledge backend must be LadybugDB; SQLite is the separate accounting/prediction ledger")
     runtime = installation.get("runtime", {})
     if runtime.get("kind") != "dot_cloud":
-        raise ValueError("Dot cloud is the required central owner runtime")
+        raise ValueError("Runtime must run on This Dot’s cloud computer")
     if require_storage_acceptance and storage.get("decision_accepted") is not True:
         raise ValueError("Database discussion/decision required: storage.decision_accepted must be true")
     if type(storage.get("decision_accepted")) is not bool:
@@ -194,7 +191,7 @@ def validate_installation(installation, *, require_storage_acceptance=True):
         if type(schedule.get("enabled")) is not bool:
             raise ValueError(f"Onboarding required: schedules.{key}.enabled")
         if schedule["enabled"] and not _text(schedule.get("rrule"), f"schedules.{key}.rrule").startswith("RRULE:"):
-            raise ValueError("Use a native RFC 5545 RRULE")
+            raise ValueError("Use an RFC 5545 recurrence rule")
     gitops = installation.get("gitops", {})
     _text(gitops.get("ref"), "gitops.ref")
     if gitops.get("update_policy") != "fast_forward":
@@ -207,14 +204,14 @@ def validate_installation(installation, *, require_storage_acceptance=True):
 
 def load_configuration(*, require_storage_acceptance=True):
     fields = environment_fields()
-    unknown = {key for key in os.environ if key.startswith("SQUAD_")} - set(fields) - set(SECRET_ENV) - RUNTIME_ENV
+    unknown = {key for key in os.environ if key.startswith("SQUAD_")} - set(fields) - RUNTIME_ENV
     if unknown:
-        raise ValueError("Unsupported SQUAD configuration keys: " + ", ".join(sorted(unknown)) + "; use documented individual native variables")
+        raise ValueError("Unsupported SQUAD configuration keys: " + ", ".join(sorted(unknown)) + "; use documented individual environment variables")
     if not any(name in os.environ for name in fields):
-        raise ValueError("Onboarding required: bind the documented individual SQUAD_* variables on Dot's cloud owner")
+        raise ValueError("Onboarding required: load documented SQUAD_* variables from project .env")
     missing = sorted(set(fields) - set(os.environ))
     if missing:
-        raise ValueError("Missing required native configuration: " + ", ".join(missing))
+        raise ValueError("Missing required environment configuration: " + ", ".join(missing))
     installation = configuration_template()
     for name, (path, kind) in fields.items():
         value = os.environ[name]
@@ -230,7 +227,9 @@ def load_configuration(*, require_storage_acceptance=True):
     return installation
 
 
-SECRET_ENV = ("SQUAD_GOOGLE_REFRESH_TOKEN", "SQUAD_GOOGLE_CLIENT_ID", "SQUAD_GOOGLE_CLIENT_SECRET")
+def secret_values():
+    return [value for key, value in os.environ.items() if len(value) >= 8
+            and re.search(r'(^|_)(TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)($|_)', key, re.I)]
 
 
 def reject_secrets(value):
@@ -243,13 +242,13 @@ def reject_secrets(value):
         for child in value:
             reject_secrets(child)
     elif isinstance(value, str):
-        if any(os.environ.get(key) and os.environ[key] in value for key in SECRET_ENV):
+        if any(secret in value for secret in secret_values()):
             raise ValueError('Runtime credentials cannot be copied into installation/evidence text')
 
 
 def environment_fields():
     template = configuration_template()
-    integers = {"schema_version", "max_trade_ideas_per_day", "max_candidates_per_day",
+    integers = {"schema_version", "max_candidates_per_day",
                 "backup_interval_hours", "max_bytes", "max_archive_bytes"}
     booleans = {"decision_accepted", "enabled"}
     numbers = {"round_trip_cost_bps"}
@@ -267,15 +266,13 @@ def environment_fields():
 
 
 def has_configuration():
-    return any(key.startswith("SQUAD_") and key not in RUNTIME_ENV | set(SECRET_ENV) for key in os.environ)
+    return any(key.startswith("SQUAD_") and key not in RUNTIME_ENV for key in os.environ)
 
 
 def redact(message):
     message = str(message)
-    for key in SECRET_ENV:
-        value = os.environ.get(key)
-        if value:
-            message = message.replace(value, "[REDACTED]")
+    for value in secret_values():
+        message = message.replace(value, "[REDACTED]")
     return message
 
 

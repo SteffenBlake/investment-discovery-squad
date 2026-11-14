@@ -10,11 +10,12 @@ from investment_engine.ledger import Store
 from investment_engine.util import UTC, load_method_settings, stamp
 
 
-def completed_installation(folder, *, profile_id="test-owner", currency="USD", cash="1000.00", timezone="UTC", lot="1"):
+def completed_installation(folder, *, profile_id="test-owner", currency="USD", timezone="UTC", lot="1"):
     folder = Path(folder).resolve()
     installation = configuration_template()
     installation.update(profile_id=profile_id, timezone=timezone, jurisdiction="Synthetic test jurisdiction",
-                   base_currency=currency, starting_cash=cash, max_trade_ideas_per_day=4, max_candidates_per_day=1, round_trip_cost_bps=20,
+                   risk_preferences='Synthetic risk restrictions for isolated tests',
+                   base_currency=currency, max_candidates_per_day=1, round_trip_cost_bps=20,
                    brokerage={"name": "Fictional mechanism", "execution_mode": "human", "constraints": "Test only",
                               "entry_fee_fixed": "0", "entry_fee_per_unit": "0"},
                    worker={"model": None, "reasoning_effort": None},
@@ -59,7 +60,6 @@ def native_environment(installation):
 def demo_settings():
     """Explicitly fictional test defaults; never used for production onboarding."""
     return {**load_method_settings(), "profile_id": "synthetic", "timezone": "UTC", "base_currency": "USD",
-            "starting_cash": "1000.00", "max_trade_ideas_per_day": 4,
             "max_candidates_per_day": 1, "round_trip_cost_bps": 20,
             "brokerage": {"name": "Synthetic test mechanism", "execution_mode": "human", "constraints": "Fictional",
                           "entry_fee_fixed": "0", "entry_fee_per_unit": "0"},

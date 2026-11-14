@@ -108,3 +108,7 @@ Guarding scenarios that are unlikely / dumb is waste of tokens, waste time
 Keeping files easy maintain trumps guarding/handling unlikely scenario
 
 YOU AINT GONNA NEED IT
+
+Common pitfall: over-cautious overfitted tools
+
+Example: making script to perform a controlled action the agent couldve just done on their own easily

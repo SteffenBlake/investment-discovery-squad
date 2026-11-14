@@ -109,15 +109,17 @@ class KnowledgeTests(unittest.TestCase):
             Knowledge(self.settings, 'another-ledger')
         self.graph = Knowledge(self.settings, self.store.identity)
 
-    def test_portfolio_packet_uses_supplied_holdings_without_fabricating_fills(self):
+    def test_portfolio_packet_reads_current_holdings_without_saving_account(self):
         self.graph.ingest(research_batch())
         self.graph.close()
         try:
+            before = self.store.db.total_changes
             result = portfolio_context(Engine(self.store, self.settings), {'cash': '500', 'currency': 'USD', 'holdings': {'SYNTH': '2', 'UNKNOWN': '3'}})
             self.assertTrue(result['portfolio_supplied_by_user'])
             self.assertEqual(result['portfolio']['cash'], '500')
+            self.assertEqual(self.store.db.total_changes, before)
             self.assertEqual(result['knowledge']['missing_symbols'], ['UNKNOWN'])
-            self.assertEqual(self.store.db.execute('SELECT COUNT(*) FROM fills').fetchone()[0], 0)
+            self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM events WHERE kind='portfolio_snapshot'").fetchone()[0], 0)
             self.assertEqual(len(result['knowledge']['claims']), 1)
         finally:
             self.graph = Knowledge(self.settings, self.store.identity)

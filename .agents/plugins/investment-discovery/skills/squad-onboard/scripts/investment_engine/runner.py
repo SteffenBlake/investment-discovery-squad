@@ -3,9 +3,7 @@ import json
 from . import feeds
 from .configuration import instrument, redact
 from .engine import CandidateLimit
-from .portfolio import Portfolio
 from .util import instant, stamp
-from .trial import trial_status
 
 
 def run(engine, *, research=False, offline=False, forecast_enabled=True, continue_work=False):
@@ -18,10 +16,6 @@ def run(engine, *, research=False, offline=False, forecast_enabled=True, continu
     previous_deliveries = {row["id"] for row in result["alerts"] + result["uncertain_deliveries"]}
     if not continue_work and delivery_waiting:
         result["remaining_work"] = True
-        return result
-    result['trial'] = trial_status(engine)
-    if result['trial']['status'] in {'review_required', 'stopped'}:
-        result['remaining_work'] = False
         return result
     if research:
         for spec in settings["research_universe"]:
@@ -107,7 +101,15 @@ def run(engine, *, research=False, offline=False, forecast_enabled=True, continu
                                  (signal_id, stamp(current), event_id)).fetchone():
                 continue
             quote = data["quote"]
-            if quote is None or (instant(current) - instant(quote["at"])).total_seconds() > settings["max_quote_age_seconds"]:
+            if quote is None or instant(quote['at']) < instant(feature['available_at']):
+                data = feeds.market(spec['symbol'], store.path.parent / 'cache', current,
+                                    instrument(settings, spec['symbol']), minimum_capture_at=feature['available_at'])
+                market_data[spec['symbol']] = data
+                quote = data['quote']
+                current = store.clock()
+            if (quote is None or instant(quote['at']) < instant(feature['available_at']) or
+                    (instant(current) - instant(quote["at"])).total_seconds() > settings["max_quote_age_seconds"]):
+                result['research'].append({'signal_id': signal_id, 'status': 'WAITING_FOR_CURRENT_QUOTE'})
                 continue
             prediction_id = engine.register(signal_id, event_id, event_available_at=feature["available_at"],
                                             quote_at=quote["at"], reference_price=quote["price"], feature_value=feature["value"],
@@ -118,8 +120,7 @@ def run(engine, *, research=False, offline=False, forecast_enabled=True, continu
     _delivery_work(store, result)
     result["remaining_work"] = False
     result["signals"] = [dict(r) for r in store.db.execute("SELECT * FROM signals ORDER BY id")]
-    result["portfolio"] = Portfolio(engine).balance()
-    result["execution"] = "Recommendations only; user places every brokerage order and reports fills"
+    result["execution"] = "User reviews recommendations and executes orders"
     with store.transaction():
         store.event("run_completed", research=research, offline=offline, errors=len(result["errors"]),
                     evaluated=len(result["evaluated"]), alerts_pending=len(result["alerts"]))

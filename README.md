@@ -2,11 +2,11 @@
 
 Dot researches existing market history for useful patterns. Develop idea on earlier data, freeze test plan, then test once against untouched later data. Statistically supported result qualifies idea for further investigation. Failed ideas stay rejected; related new premises follow strict retry rules.
 
-Qualified ideas produce future predictions during initial trial lasting at most 30 days. Review all results, pending predictions, returns after costs and ordinary investment comparison before choosing whether to continue. [Historical method](.agents/plugins/investment-discovery/skills/squad-research/references/methodology.md) and [live trial](.agents/plugins/investment-discovery/skills/squad-monitor/references/validation.md#live-trial).
+Qualified ideas produce future predictions. Review complete results, pending predictions, returns after costs, ordinary buy-and-hold comparison and limitations. User controls Dot's operation and schedules. [Historical method](.agents/plugins/investment-discovery/skills/squad-research/references/methodology.md); [prediction results](.agents/plugins/investment-discovery/skills/squad-monitor/references/validation.md).
 
-Paste current holdings and available uninvested cash for portfolio assessment. Dot explains hold/buy/sell/cash choices using current evidence. Python sizes eligible purchases from supplied cash and fees. You execute trades and report fills; updated portfolios capture account changes.
+Paste current portfolio and available cash; ask what to do next. Dot explains buy/hold/sell/cash choices using research. Python sizes eligible purchases from supplied cash, prices and fees. Each request uses supplied current account.
 
-Private Ladybug database stores research; SQLite stores test plans, predictions/results, portfolios and receipts. Complete recovery ZIPs upload to private Google Drive folder. Upload checks Drive's reported checksum; latest three successful backups retained. [Storage/recovery](.agents/plugins/investment-discovery/skills/squad-onboard/references/storage.md).
+Private Ladybug database stores research; SQLite stores test plans, predictions/results and receipts. Complete recovery ZIP updates same private Google Drive file. Drive version history holds earlier contents under normal expiry rules. [Storage/recovery](.agents/plugins/investment-discovery/skills/squad-onboard/references/storage.md).
 
 ## Install
 
@@ -15,7 +15,7 @@ Need Dot, permission to upload plugins in ChatGPT and authorized private Google 
 1. Create Dot in ChatGPT.
 2. Download `investment-discovery-plugin-<tag>.zip` from [latest release](https://github.com/SteffenBlake/investment-discovery-squad/releases/latest).
 3. Upload ZIP through ChatGPT's plugin upload and install **investment-discovery**.
-4. Tell Dot: “Use squad-onboard. Create or reuse a durable child task, then follow bundled references/setup.md to perform setup in its cloud container.”
+4. Tell Dot: “Use squad-onboard checklist to set this up directly on This Dot’s cloud computer.”
 
 [Setup](.agents/plugins/investment-discovery/skills/squad-onboard/references/setup.md) covers runtime, personal choices, storage consent, account access, backups and scheduled automations.
 

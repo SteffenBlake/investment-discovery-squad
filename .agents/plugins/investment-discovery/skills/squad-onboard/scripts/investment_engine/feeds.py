@@ -52,18 +52,17 @@ def fetch_json(url, cache_dir, now, *, ttl_seconds=3600, minimum_capture_at=None
     return payload
 
 
-def market(symbol, cache_dir, now, instrument):
+def market(symbol, cache_dir, now, instrument, *, minimum_capture_at=None):
     import exchange_calendars
     zone = ZoneInfo(instrument['exchange_timezone'])
     calendar = exchange_calendars.get_calendar(instrument['exchange_calendar'],
         start=(instant(now) - timedelta(days=366 * MARKET_HISTORY_YEARS + 14)).date(),
         end=(instant(now) + timedelta(days=1)).date())
     today = str(instant(now).astimezone(zone).date())
-    minimum_capture_at = None
     if calendar.is_session(today):
         ready = calendar.session_close(today).to_pydatetime() + timedelta(minutes=30)
         if instant(now) >= ready:
-            minimum_capture_at = ready
+            minimum_capture_at = max(ready, instant(minimum_capture_at)) if minimum_capture_at else ready
     url = "https://query1.finance.yahoo.com/v8/finance/chart/" + urllib.parse.quote(symbol, safe="") + f"?range={MARKET_HISTORY_YEARS}y&interval=1d&events=div%2Csplits"
     result = fetch_json(url, cache_dir, now, ttl_seconds=1800, minimum_capture_at=minimum_capture_at)
     chart = result["body"]["chart"]

@@ -24,7 +24,6 @@ After send, `ack --alert ID --token TOKEN --receipt MESSAGE_ID_OR_LINK`. Confirm
 - Missing actual session close or late endpoint: retain pending prediction and blocker.
 - Missing historical release evidence: find dated archive/original publication under [historical method](../../squad-research/references/methodology.md).
 - Split/mechanism breakdown: record evidence-based invalidation/degradation; retain original results.
-- Trial expired: present [performance review](validation.md#live-trial) and pause research/monitor automations through deployment.
-- Fill discrepancy/exit review: use [portfolio](../../squad-trades/references/portfolio.md).
+- Current portfolio/next-action advice: use [portfolio](../../squad-trades/references/portfolio.md).
 
-After delivery/remaining work, apply [backup](../../squad-onboard/references/storage.md#full-cloud-backup). Routine unchanged runs stay quiet. Report persistent runtime, missed-run and delivery failures. User stop/pause changes go through [scheduled automations](../../squad-reconcile/references/deployment.md#scheduled-automations).
+After delivery/remaining work, apply [backup](../../squad-onboard/references/storage.md#connected-backup-procedure). Routine unchanged runs stay quiet. Report persistent runtime, missed-run and delivery failures. User stop/pause changes go through [scheduled automations](../../squad-reconcile/references/deployment.md#scheduled-automations).

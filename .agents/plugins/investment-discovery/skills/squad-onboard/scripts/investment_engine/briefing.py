@@ -1,4 +1,4 @@
-"""Bounded evidence packet for LLM portfolio decisions; never place orders or fabricate fills."""
+"""Research context for supplied current portfolio."""
 
 import json
 
@@ -8,11 +8,9 @@ from .util import stamp
 
 
 def portfolio_context(engine, portfolio=None, *, symbols=None, query=None, limit=15, hops=2):
-    account = Portfolio(engine)
-    recorded = account.balance()
     supplied = portfolio is not None
-    portfolio = account.record_snapshot(portfolio) if supplied else recorded
-    holdings = portfolio['holdings']
+    portfolio = Portfolio(engine).normalize_snapshot(portfolio) if supplied else None
+    holdings = portfolio['holdings'] if supplied else {}
     selected = list(dict.fromkeys(symbols or holdings.keys() or [i['symbol'] for i in engine.settings['instruments']]))
     with Knowledge(engine.settings, engine.store.identity) as graph:
         knowledge = graph.context(selected, query=query, limit=limit, hops=hops)
@@ -37,6 +35,5 @@ def portfolio_context(engine, portfolio=None, *, symbols=None, query=None, limit
                           'active_forecasts': [dict(r) for r in active[:100]], 'active_forecasts_truncated': len(active) > 100,
                           'complete_record_command': 'report --signal ' + spec['id']})
     return {'at': stamp(engine.store.clock()), 'portfolio_supplied_by_user': supplied, 'portfolio': portfolio,
-            'previous_portfolio_snapshot': recorded,
             'knowledge': knowledge, 'signals': summaries, 'signals_truncated': len(specs) > 50,
             'instruction': 'Recommend buy/hold/sell/cash using the supplied actual portfolio, dated evidence, contradictions and numerical qualification. Obtain an actual portfolio snapshot before purchase sizing.'}

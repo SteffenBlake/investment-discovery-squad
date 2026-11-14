@@ -35,7 +35,7 @@ Fields:
 - Source: HTTP(S) URL without embedded credentials, title and original extracted text (up to five million characters). Optional content_sha256 must match. published_at is the publisher's claim; null means unknown. Database-owning runtime assigns first_captured_at at ingestion. Neither field alone proves historical first availability. Keep original archive/revision timing evidence before numerical validation.
 - Claim status: hypothesis, observed, supported, disputed, invalidated. Confidence is a researcher estimate in [0,1], **not** measured predictive accuracy. Each claim references at least one entity and source. Optional validity dates retain expired evidence for assessment.
 - Relationship: from/to entity IDs, kind, and evidence claim_id. Referenced existing/incoming IDs must exist. Claims may reference contradicts IDs in either direction; retrieval includes counterclaims.
-- At most 500 records per category/batch, 100 references per claim. No credentials in JSON. Keep private batch/portfolio files outside Git.
+- At most 500 records per category/batch, 100 references per claim. No credentials in JSON. Keep private batch files outside Git; portfolio input temporary per request.
 
 ```sh
 python .agents/skills/squad-onboard/scripts/main.py knowledge ingest --file /private/research/batch.json
