@@ -1,13 +1,35 @@
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from investment_engine.runtime import owner_lock
+from investment_engine.knowledge import Knowledge
+from investment_engine.runtime import ladybug_home, owner_lock
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_ladybug_home_defaults_to_private_system_temporary_storage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict(os.environ, {}, clear=True), patch('investment_engine.runtime.tempfile.gettempdir', return_value=directory):
+                path = ladybug_home()
+            self.assertEqual(path, Path(directory) / f'squad-runtime-{os.getuid()}' / 'ladybug')
+            self.assertEqual(path.stat().st_mode & 0o777, 0o700)
+
+    def test_ladybug_uses_configured_directory_for_install_and_reopen(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / 'runtime cache'
+            settings = {'profile_id': 'runtime-test', 'storage': {'knowledge_path': str(Path(directory) / 'graph.lbdb')}}
+            with patch.dict(os.environ, {'SQUAD_LADYBUG_HOME': str(home)}):
+                with Knowledge(settings, 'runtime-test', create=True) as graph:
+                    self.assertEqual(graph.rows("CALL current_setting('home_directory') RETURN *"), [[str(home)]])
+                    graph.ensure_index()
+                self.assertTrue(any(home.rglob('*fts*')))
+                with Knowledge(settings, 'runtime-test') as graph:
+                    graph.ensure_index()
+
     def test_independent_writer_stops_while_owner_lock_held(self):
         with tempfile.TemporaryDirectory() as directory:
             cfg = {'storage': {'database_path': str(Path(directory) / 'data' / 'ledger.sqlite3')}}

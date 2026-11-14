@@ -4,6 +4,7 @@ import copy
 import json
 import os
 import re
+import subprocess
 import tempfile
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -48,6 +49,7 @@ _CONFIGURATION_TEMPLATE = {'schema_version': 2,
 # Architecture is fixed, not another onboarding choice.
 _FIXED_FIELDS = {'schema_version', 'runtime.kind', 'storage.backend', 'storage.cloud_backup.provider',
                  'brokerage.execution_mode', 'gitops.update_policy'}
+RUNTIME_ENV = {"SQUAD_REPO", "SQUAD_PYTHON", "SQUAD_TASK_KEY", "SQUAD_LADYBUG_HOME"}
 
 
 def configuration_template():
@@ -76,7 +78,12 @@ def absolute_path(value, label):
     if not path.is_absolute():
         raise ValueError(f"{label} must be absolute, outside the checkout")
     path = path.resolve()
-    if path == ROOT or ROOT in path.parents or any((parent / '.git').exists() for parent in (path, *path.parents)):
+    directory = path
+    while not directory.is_dir():
+        directory = directory.parent
+    checkout = subprocess.run(['git', '-C', str(directory), 'rev-parse', '--is-inside-work-tree'],
+                              capture_output=True, text=True, check=False)
+    if path == ROOT or ROOT in path.parents or (checkout.returncode == 0 and checkout.stdout.strip() == 'true'):
         raise ValueError(f"{label} must live outside every Git checkout/worktree")
     return path
 
@@ -200,7 +207,7 @@ def validate_installation(installation, *, require_storage_acceptance=True):
 
 def load_configuration(*, require_storage_acceptance=True):
     fields = environment_fields()
-    unknown = {key for key in os.environ if key.startswith("SQUAD_")} - set(fields) - set(SECRET_ENV) - {"SQUAD_REPO", "SQUAD_PYTHON", "SQUAD_TASK_KEY"}
+    unknown = {key for key in os.environ if key.startswith("SQUAD_")} - set(fields) - set(SECRET_ENV) - RUNTIME_ENV
     if unknown:
         raise ValueError("Unsupported SQUAD configuration keys: " + ", ".join(sorted(unknown)) + "; use documented individual native variables")
     if not any(name in os.environ for name in fields):
@@ -260,7 +267,7 @@ def environment_fields():
 
 
 def has_configuration():
-    return any(key.startswith("SQUAD_") and key not in {"SQUAD_REPO", "SQUAD_PYTHON", "SQUAD_TASK_KEY", *SECRET_ENV} for key in os.environ)
+    return any(key.startswith("SQUAD_") and key not in RUNTIME_ENV | set(SECRET_ENV) for key in os.environ)
 
 
 def redact(message):

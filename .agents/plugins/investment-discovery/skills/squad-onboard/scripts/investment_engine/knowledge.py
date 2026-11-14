@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlsplit
 
 from .configuration import private_directory, reject_secrets, write_private_json
+from .runtime import ladybug_home
 from .util import canonical, digest, instant, now_utc, stamp
 
 SCHEMA_VERSION = "1"
@@ -54,6 +55,7 @@ class Knowledge:
             os.umask(previous)
         self.conn = ladybug.Connection(self.db)
         try:
+            self.conn.execute('CALL home_directory=' + json.dumps(str(ladybug_home())))
             if not existed:
                 for table, fields in TABLES.items():
                     self.conn.execute(f"CREATE NODE TABLE {table}({fields})")

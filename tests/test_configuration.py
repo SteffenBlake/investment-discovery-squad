@@ -258,10 +258,10 @@ class ConfigurationTests(unittest.TestCase):
     def test_private_json_creates_private_directories_under_default_umask(self):
         from investment_engine.configuration import write_private_json
         ancestor = self.folder / "shared"
-        ancestor.mkdir(mode=0o755)
         target = ancestor / "private" / "nested" / "data.json"
         previous = os.umask(0o022)
         try:
+            ancestor.mkdir(mode=0o755)
             write_private_json(target, {"private": "evidence"})
         finally:
             os.umask(previous)

@@ -21,9 +21,9 @@ This procedure owns initial creation and later changes. Discover host's tools to
 | reconcile | Use $squad-reconcile |
 
 1. List jobs; update matching returned IDs or create missing jobs. Preserve unrelated jobs and explicit user pauses. Resolve project-owned duplicates.
-2. Set reviewed schedule/timezone, enabled flag, destination, supported model/effort and owner runtime/configuration bindings. Invocation identifies approved checkout and interpreter. Null model/effort restores host preference.
+2. Set reviewed schedule/timezone, enabled state and destination through supported host controls. Schedule wakes coordinating Dot to follow relevant skill and send environment-dependent work to existing coding chat; save chat reference in job instructions. Set model/effort where supported; null restores host preference. Coding chat uses approved checkout and interpreter.
 3. After uncertain mutation, inspect saved state before retry. Read each job back; retain IDs and settings privately.
-4. Execute independent saved worker reopening original research/prediction paths with matching installation identities. Retain successful run in host history. Missing capabilities leave affected work inactive and reported.
+4. Execute saved schedule. Verify coordinating Dot follows relevant skill, sends required work to existing coding chat and receives result confirming original research/prediction stores reopened with matching installation identities. Retain observed result in host history. Failed route leaves affected scheduled workflow inactive; report specific failure.
 5. Apply [trial](../../squad-monitor/references/validation.md#live-trial) status: expired/stopped trial disables research/monitor jobs; approved continuation restores reviewed enabled choices. Preserve user pauses. Reconcile job remains available.
 
 [Delivery](../../squad-monitor/references/operations.md#claim-deliver-acknowledge) owns message checks. [Native controls](https://learn.chatgpt.com/docs/dots/controls).

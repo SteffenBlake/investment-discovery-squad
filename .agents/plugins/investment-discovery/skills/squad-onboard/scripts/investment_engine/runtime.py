@@ -2,6 +2,7 @@
 
 import fcntl
 import os
+import tempfile
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
@@ -9,6 +10,15 @@ from pathlib import Path
 from .configuration import private_directory
 
 _HELD = ContextVar('squad_held_locks', default=frozenset())
+
+
+def ladybug_home():
+    default = Path(tempfile.gettempdir()) / f'squad-runtime-{os.getuid()}' / 'ladybug'
+    path = Path(os.environ.get('SQUAD_LADYBUG_HOME', default))
+    if not path.is_absolute():
+        raise ValueError('SQUAD_LADYBUG_HOME must be an absolute writable directory')
+    private_directory(path)
+    return path.resolve()
 
 
 @contextmanager

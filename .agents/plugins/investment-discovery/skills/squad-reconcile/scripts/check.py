@@ -8,7 +8,8 @@ from pathlib import Path
 
 def main():
     root = Path(os.environ.get("SQUAD_REPO", Path(__file__).resolve().parents[6])).resolve()
-    env = {key: value for key, value in os.environ.items() if not key.startswith('SQUAD_')}
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith('SQUAD_') or key == 'SQUAD_LADYBUG_HOME'}
     env['PYTHONPATH'] = os.pathsep.join((str(root / '.agents/skills/squad-onboard/scripts'), str(root)))
     return subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-q'], cwd=root, env=env).returncode
 

@@ -1,12 +1,13 @@
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from investment_engine.cli import execute, parser
-from investment_engine.configuration import load_configuration, redact, validate_installation
+from investment_engine.configuration import absolute_path, has_configuration, load_configuration, redact, validate_installation
 from tests.fixtures import completed_installation, native_environment
 
 
@@ -56,13 +57,34 @@ class NativeConfigurationTests(unittest.TestCase):
                 load_configuration()
 
     def test_other_git_checkout_cannot_hold_live_state(self):
-        other = Path(self.temp.name) / 'another-checkout'
-        other.mkdir()
-        (other / '.git').write_text('gitdir: /not/a/live/worktree')
-        self.installation['storage']['database_path'] = str(other / 'private' / 'ledger.sqlite3')
-        with patch.dict(os.environ, native_environment(self.installation), clear=True):
-            with self.assertRaisesRegex(ValueError, 'every Git checkout'):
-                load_configuration()
+        for separate in (False, True):
+            other = Path(self.temp.name) / f'checkout-{separate}'
+            command = ['git', 'init', '--quiet']
+            if separate:
+                command.append(f'--separate-git-dir={self.temp.name}/git-metadata')
+            subprocess.run([*command, str(other)], check=True, capture_output=True)
+            with self.subTest(separate_git_directory=separate):
+                with self.assertRaisesRegex(ValueError, 'every Git checkout'):
+                    absolute_path(str(other / 'private' / 'ledger.sqlite3'), 'database')
+
+    def test_empty_and_invalid_git_markers_allow_private_storage(self):
+        for marker in ('empty-directory', 'invalid-file'):
+            other = Path(self.temp.name) / marker
+            other.mkdir()
+            if marker == 'empty-directory':
+                (other / '.git').mkdir()
+            else:
+                (other / '.git').write_text('gitdir: /missing-worktree-metadata')
+            path = other / 'squad-data' / 'ledger.sqlite3'
+            with self.subTest(marker=marker):
+                self.assertEqual(absolute_path(str(path), 'database'), path)
+
+    def test_ladybug_home_is_runtime_configuration(self):
+        setting = {'SQUAD_LADYBUG_HOME': str(Path(self.temp.name) / 'extensions')}
+        with patch.dict(os.environ, setting, clear=True):
+            self.assertFalse(has_configuration())
+        with patch.dict(os.environ, {**native_environment(self.installation), **setting}, clear=True):
+            self.assertEqual(load_configuration(), self.installation)
 
 
     def test_unknown_nested_configuration_field_rejected(self):
@@ -78,7 +100,7 @@ class NativeConfigurationTests(unittest.TestCase):
                 validate_installation(installation)
 
     def test_cloud_environment_cli_initializes_shared_identity_and_graph(self):
-        with patch.dict(os.environ, {'HOME': os.environ['HOME'], **native_environment(self.installation)}, clear=True):
+        with patch.dict(os.environ, native_environment(self.installation), clear=True):
             result = execute(parser().parse_args(['init']))
             self.assertEqual(result['knowledge']['backend'], 'ladybug')
             self.assertEqual(result['setup_identity'], result['knowledge']['setup_identity'])
