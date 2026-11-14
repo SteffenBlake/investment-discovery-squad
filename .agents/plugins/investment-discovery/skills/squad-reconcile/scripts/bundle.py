@@ -1,5 +1,6 @@
 """Publish a complete public plugin archive atomically."""
 
+import argparse
 import hashlib
 import fnmatch
 import json
@@ -17,7 +18,7 @@ EXCLUDED = ('__pycache__', '*.pyc', '*.pyo', '.venv', 'dist', 'build', '*.egg-in
             'pending-upload.json', '.restore-in-progress.json', 'deployment.json', 'runtime.json')
 
 
-def archive():
+def archive(version=None):
     required = [ROOT / 'LICENSE', PLUGIN / 'plugin.json']
     required.extend(PLUGIN / 'skills' / name / 'SKILL.md' for name in NAMES)
     required.extend(PLUGIN / 'skills/squad-onboard' / name for name in
@@ -35,14 +36,18 @@ def archive():
         if path.is_file():
             entries.append((path, str(path.relative_to(PLUGIN))))
     # Read every input before creating output; failed writes leave prior release intact.
-    contents = [(name, path.read_bytes()) for path, name in entries]
+    contents = {name: path.read_bytes() for path, name in entries}
+    if version is not None:
+        manifest = json.loads(contents['plugin.json'])
+        manifest['version'] = version.removeprefix('v')
+        contents['plugin.json'] = (json.dumps(manifest, indent=2) + '\n').encode('utf-8')
     folder = ROOT / 'dist'
     folder.mkdir(exist_ok=True)
     target = folder / 'investment-discovery-plugin.zip'
     descriptor, temporary_name = tempfile.mkstemp(dir=folder, prefix='.plugin-', suffix='.tmp')
     try:
         with os.fdopen(descriptor, 'wb') as stream, zipfile.ZipFile(stream, 'w', zipfile.ZIP_DEFLATED) as output:
-            for name, data in contents:
+            for name, data in contents.items():
                 info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
                 info.compress_type = zipfile.ZIP_DEFLATED
                 info.external_attr = 0o100644 << 16
@@ -56,4 +61,6 @@ def archive():
 
 
 if __name__ == '__main__':
-    print(json.dumps(archive()))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--version', help='Release version or tag; leading v removed from packaged version')
+    print(json.dumps(archive(parser.parse_args().version)))

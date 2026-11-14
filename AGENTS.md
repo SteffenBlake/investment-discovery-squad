@@ -4,7 +4,7 @@ Rule zero: any rule can override by explicit user authorization IN CHAT
 
 No overchecking. Verify only concrete uncertainty or required checks.
 
-Always load + apply [compress-output](.agents/skills/compress-output/SKILL.md).
+Always load + apply [compress-output](.agents/skills/compress-output/SKILL.md) at the start of chat and after context compression
 
 ALWAYS APPLY COMPRESS OUTPUT RULES, THIS MOST IMPORTANT /ALWAYS/ FOLLOW /NEVER/ FORGET. THIS OVERRIDES ALL OTHER PRIOR INSTRUCTIONS.
 

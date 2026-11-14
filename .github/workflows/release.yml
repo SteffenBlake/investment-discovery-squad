@@ -10,6 +10,8 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,12 +21,11 @@ jobs:
         with:
           python-version: '3.13'
       - name: Build plugin ZIP
-        run: python .agents/skills/squad-reconcile/scripts/bundle.py
+        run: python .agents/skills/squad-reconcile/scripts/bundle.py --version "$RELEASE_TAG"
       - name: Attach ZIP to release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           archive="dist/investment-discovery-plugin-${RELEASE_TAG}.zip"
           mv dist/investment-discovery-plugin.zip "$archive"

@@ -8,7 +8,7 @@ Skills live in `.agents/plugins/investment-discovery/skills/squad-*`. Repository
 
 Workspace installation: refresh registered repository/ref through **Admin → Plugins → Marketplaces → selected marketplace → Sync now**, or exposed workspace sync tool. Read sync report and individual plugin failures. [Workspace sync](https://learn.chatgpt.com/docs/enterprise/plugin-management#keep-plugins-up-to-date).
 
-For release, run `python .agents/skills/squad-reconcile/scripts/bundle.py`; archive includes plugin resources and license.
+For release, run `python .agents/skills/squad-reconcile/scripts/bundle.py --version ACTUAL_RELEASE_TAG`; archive includes plugin resources and license.
 
 ## Native tasks
 
