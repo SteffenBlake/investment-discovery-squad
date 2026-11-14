@@ -1,6 +1,6 @@
 # Shared commands
 
-Python 3.11+; install `scripts/requirements.txt`, then `setup-runtime`. Checkout entry: `python .agents/skills/squad-onboard/scripts/main.py COMMAND`. Installed plugin resolves sibling squad-onboard entry. Use configured central owner.
+Python 3.11+; install `scripts/requirements.txt`, then `setup-runtime`. Checkout entry: `python .agents/skills/squad-onboard/scripts/main.py COMMAND`. Installed plugin resolves sibling squad-onboard entry. Run commands through [saved cloud thread](cloud.md#bind-and-verify-owner) in owner cloud container.
 
 ## Setup
 

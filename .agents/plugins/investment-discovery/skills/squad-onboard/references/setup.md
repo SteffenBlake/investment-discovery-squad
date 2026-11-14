@@ -4,7 +4,7 @@ Handle computer work; obtain personal choices, account authorization and storage
 
 ## Source and runtime
 
-Resolve registered repository and approved ref from workspace marketplace. Use existing coding chat and its execution environment when available. Reuse matching clean checkout there, or clone through authorized Git access. Read checkout's AGENTS.md. [Cloud](cloud.md) owns runtime bindings and account access.
+Resolve registered repository and approved ref from workspace marketplace. Follow [task setup](cloud.md#bind-and-verify-owner): reuse suitable durable child task (cloud thread), or create one with fresh cloud container using available saved environment configuration. Dot handles creation and continues setup there, including first run with empty connected-environment list. Reuse matching clean checkout in task's cloud container, or clone through authorized Git access. Read checkout's AGENTS.md. [Cloud](cloud.md) owns task identity, runtime bindings and account access.
 
 Python 3.11+ and timezone data required:
 
@@ -20,7 +20,7 @@ Installed plugin includes sibling squad-onboard runtime/resources. Bind `SQUAD_R
 
 ## Configuration and storage
 
-Use [configuration](configuration.md) for personal choices. `onboarding` generates variable names/types. Bind native settings and [Google secrets](cloud.md#google-authorization-and-renewal) in owner execution environment.
+Use [configuration](configuration.md) for personal choices. `onboarding` generates variable names/types. Bind native settings and [Google secrets](cloud.md#google-authorization-and-renewal) in owner cloud container.
 
 Run `storage-plan` before acceptance. Explain private research/prediction files, original sources, Drive budget and recovery window. After user accepts, initialize following [storage](storage.md#provision-or-adopt). `init` checks remote backup target before creating empty stores; existing backup requires recovery. Then run `doctor` and `backup cloud`.
 
@@ -28,6 +28,6 @@ Research existing history using [one-shot method](../../squad-research/reference
 
 ## Initial native tasks
 
-Use [native task procedure](../../squad-reconcile/references/deployment.md#native-tasks) to create/update installation's jobs and verify scheduled Dot → existing coding chat → original stores → returned result. Send labelled setup notification using [delivery requirements](../../squad-monitor/references/operations.md#claim-deliver-acknowledge); retain message ID/link in private history.
+Use [native task procedure](../../squad-reconcile/references/deployment.md#native-tasks) to create/update installation's jobs and verify scheduled Dot → saved cloud thread → original stores → returned result. Send labelled setup notification using [delivery requirements](../../squad-monitor/references/operations.md#claim-deliver-acknowledge); retain message ID/link in private history.
 
-Report installed source/runtime, private paths, backup result, saved task IDs, observed schedule/chat result and setup message receipt, plus unresolved steps.
+Report durable child task title/reference, installed source/runtime, private paths, backup result, saved schedule IDs, observed schedule/thread result and setup message receipt, plus unresolved steps.

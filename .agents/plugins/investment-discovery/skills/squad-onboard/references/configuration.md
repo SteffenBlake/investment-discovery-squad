@@ -1,6 +1,6 @@
 # Installation settings
 
-Shared research rules: [settings.json](settings.json). Personal settings: native variables on central owner. Google credentials: native secrets. Live files: private paths outside Git checkouts.
+Shared research rules: [settings.json](settings.json). Personal settings: native variables in [owner cloud container](cloud.md#bind-and-verify-owner). Google credentials: native secrets. Live files: private paths outside Git checkouts.
 
 Use user context before asking personal choices. Review investment scope, resources, storage, delivery and schedule. Leave missing choices unset while preparing proposal.
 
@@ -20,7 +20,7 @@ Use user context before asking personal choices. Review investment scope, resour
 | research_universe[] | Initial immutable hypotheses or empty list for historical prospecting |
 | storage.database_path / knowledge_path | Distinct prediction/research files in same private directory |
 | storage.backup_directory | Private staging separate from live files |
-| storage.runtime_id | Central owner identity verified by scheduled execution |
+| storage.runtime_id | Owner runtime identity verified through scheduled Dot → saved cloud thread |
 | storage.backup_interval_hours | Positive backup interval; changed evidence also triggers backup |
 | storage.cloud_backup.folder_id | Authorized private Google Drive folder |
 | storage.cloud_backup.max_bytes / max_archive_bytes | Project/archive budgets; allow temporary fourth copy during upload; archive at most 1 GiB |

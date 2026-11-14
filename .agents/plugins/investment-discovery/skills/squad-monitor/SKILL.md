@@ -2,7 +2,7 @@
 name: squad-monitor
 description: Evaluate forecasts, deliver historically qualified research alerts and review a live trial lasting at most 30 days.
 ---
-Use central owner's sibling `squad-onboard/scripts/main.py`.
+Follow [cloud-thread route](../squad-onboard/references/cloud.md#bind-and-verify-owner); run sibling `squad-onboard/scripts/main.py` in owner cloud container.
 
 1. Run `run`; inspect JSON/stderr, errors, blocked predictions, corrections and trial status. `report --signal ID` retains full history.
 2. Apply [operations](references/operations.md) for delivery and continuation work. [Validation](references/validation.md) owns endpoint rules and trial review.

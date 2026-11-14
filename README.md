@@ -13,14 +13,14 @@ Private Ladybug database stores research; SQLite stores test plans, predictions/
 Need Dot, permission to upload plugins in ChatGPT and authorized private Google Drive storage.
 
 1. Create Dot in ChatGPT.
-2. Download `investment-discovery-plugin.zip` from [latest release](https://github.com/SteffenBlake/investment-discovery-squad/releases/latest).
+2. Download `investment-discovery-plugin-<tag>.zip` from [latest release](https://github.com/SteffenBlake/investment-discovery-squad/releases/latest).
 3. Upload ZIP through ChatGPT's plugin upload and install **investment-discovery**.
-4. Tell Dot: “Use squad-onboard and follow bundled references/setup.md to set this up on your cloud computer.”
+4. Tell Dot: “Use squad-onboard. Create or reuse a durable child task, then follow bundled references/setup.md to perform setup in its cloud container.”
 
 [Setup](.agents/plugins/investment-discovery/skills/squad-onboard/references/setup.md) covers runtime, personal choices, storage consent, account access, backups and scheduled jobs.
 
 ## Releases
 
-Publish a GitHub release, including a prerelease. [Release workflow](.github/workflows/release.yml) builds tagged source and attaches `investment-discovery-plugin.zip` to release assets. Download that ZIP for ChatGPT plugin upload. Rerunning workflow replaces same-named asset. GitHub supplies workflow token automatically.
+Publish a GitHub release, including a prerelease. [Release workflow](.github/workflows/release.yml) builds tagged source and attaches `investment-discovery-plugin-<tag>.zip` to release assets, e.g. `investment-discovery-plugin-v1.2.3.zip`. Download that ZIP for ChatGPT plugin upload. Rerunning workflow replaces same-named asset. GitHub supplies workflow token automatically.
 
 ZIP contains one plugin with root `plugin.json`, five skills, runtime resources and license, following [OpenAI package requirements](https://developers.openai.com/plugins/deploy/submission-errors#plugin-root-errors).

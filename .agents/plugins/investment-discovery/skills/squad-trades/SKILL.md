@@ -2,7 +2,7 @@
 name: squad-trades
 description: Prepare configured human-executed trade recommendations, record actual reported fills, and review exits for qualified investment discovery forecasts.
 ---
-Use configured central owner and shared sibling `squad-onboard/scripts/main.py`. Human places orders. [Configuration](../squad-onboard/references/configuration.md) supplies actual budget/currency, broker, jurisdiction, costs, lots and resource limits.
+Follow [cloud-thread route](../squad-onboard/references/cloud.md#bind-and-verify-owner); run shared sibling `squad-onboard/scripts/main.py` in owner cloud container. Human places orders. [Configuration](../squad-onboard/references/configuration.md) supplies actual budget/currency, broker, jurisdiction, costs, lots and resource limits.
 
 1. Perform squad-monitor's due outcome/delivery work before assessing advice. Review returned research corrections. Normalize actual portfolio snapshot per [portfolio](references/portfolio.md); run `knowledge context --portfolio PRIVATE_FILE --query TERMS`. Assess directed relationships, source dates, contradictions, missing symbols and truncation; retrieve fresh evidence when material facts changed. Explain buy/hold/sell/cash reasoning.
 2. Actual supplied cash and holdings control purchase sizing; reported fills retain execution history. Use `report --signal ID` for complete outcomes/corrections.

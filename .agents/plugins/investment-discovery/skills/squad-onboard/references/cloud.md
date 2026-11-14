@@ -1,18 +1,22 @@
-# Execution environment and account access
+# Cloud thread, container and account access
 
-Use one owner execution environment for checkout, runtime and private stores. Coordinating Dot reads/follows installed skills directly. For environment-dependent operations, send instructions to existing coding chat and read result. [Configuration](configuration.md) defines settings; [storage](storage.md) defines ownership/recovery. Plugin installation supplies files; verify executable runtime separately.
+Use one durable child task, called cloud thread by read tool; its cloud container owns checkout, runtime and private stores. Coordinating Dot reads/follows installed skills directly. Send container-dependent operations to saved cloud thread and read result. [Configuration](configuration.md) defines settings; [storage](storage.md) defines ownership/recovery. Plugin installation supplies files; verify executable runtime separately.
 
 ## Bind and verify owner
 
+1. Discover task creation, continuation/read and saved environment configuration tools. Reuse suitable existing durable child task after verifying installation identity and container access.
+2. First run without suitable task: select available saved environment configuration and create durable child task with fresh cloud container. Empty connected-environment/cloud-computer list alone does not block creation; saved configuration supplies fresh container. Dot performs creation and continues setup there. Actual missing configuration, denied creation or tool failure: report specific blocker.
+3. Give task persistent title **🛡️ Investment Discovery — DO NOT DELETE** through supported title control. Save returned task/thread ID and link privately; retain reference in schedule instructions. Continue same cloud thread for later operations; reuse before creating another task. Verify original stores on return; missing/damaged stores follow [recovery](storage.md#recovery).
+
 Install pinned dependencies from `scripts/requirements.txt` and run shared `scripts/main.py setup-runtime` with chosen Python 3.11+ interpreter. Install timezone data when needed.
 
-Ladybug extension storage: optional `SQUAD_LADYBUG_HOME`, absolute writable directory. Bind same value to setup and later operation processes in owner execution environment; choose persistent runtime storage. Default: system temporary directory, under `squad-runtime-<user ID>/ladybug`. Temporary storage cleanup requires rerunning `setup-runtime`. Runtime creates private directories and sets Ladybug's `home_directory` before installing/loading extensions.
+Ladybug extension storage: optional `SQUAD_LADYBUG_HOME`, absolute writable directory. Bind same value to setup and later operation processes in owner cloud container; choose persistent runtime storage. Default: system temporary directory, under `squad-runtime-<user ID>/ladybug`. Temporary storage cleanup requires rerunning `setup-runtime`. Runtime creates private directories and sets Ladybug's `home_directory` before installing/loading extensions.
 
-Set `SQUAD_REPO` to approved checkout in owner execution environment. Each operation's process needs required interpreter, settings, secrets and database paths. Send environment-dependent work to existing coding chat. Verify access; different chats/scheduled runs may have separate files/credentials. Researchers return structured batches for owner ingestion. Owner lock serializes commands; live files require local access by one owner.
+Set `SQUAD_REPO` to approved checkout in owner cloud container. Each operation's process needs required interpreter, settings, secrets and database paths. Send container-dependent work to saved cloud thread. Verify access; different threads/scheduled runs may have separate files/credentials. Researchers return structured batches for owner ingestion. Owner lock serializes commands; live files require local access by one owner.
 
 Use supported native settings to inject individual configuration variables. Google credentials belong only in owner secret bindings: `SQUAD_GOOGLE_REFRESH_TOKEN`, `SQUAD_GOOGLE_CLIENT_ID`, `SQUAD_GOOGLE_CLIENT_SECRET`. Avoid printing values or copying them into prompts, arguments or evidence. Verify presence privately. Client renews short-lived access tokens in memory. Restrict network to required public feeds and Google Drive/OAuth endpoints.
 
-Use [task procedure](../../squad-reconcile/references/deployment.md#native-tasks) to verify scheduled Dot reaches original databases through existing coding chat and receives result. [Dot computers](https://learn.chatgpt.com/docs/dots/computers-and-apps).
+Use [schedule procedure](../../squad-reconcile/references/deployment.md#native-tasks) to verify scheduled Dot reaches original databases through saved cloud thread and receives result.
 
 ## Google authorization and renewal
 

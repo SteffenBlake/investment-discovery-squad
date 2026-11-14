@@ -2,7 +2,7 @@
 name: squad-research
 description: Research existing market history, register hypotheses and test untouched later history once before a short live trial.
 ---
-Use central owner's sibling `squad-onboard/scripts/main.py`. Apply squad-monitor's outcome/delivery work first.
+Follow [cloud-thread route](../squad-onboard/references/cloud.md#bind-and-verify-owner); run sibling `squad-onboard/scripts/main.py` in owner cloud container. Apply squad-monitor's outcome/delivery work first.
 
 1. Run `research`; handle returned work through [monitor operations](../squad-monitor/references/operations.md). Expired trial requires [performance review](../squad-monitor/references/validation.md#live-trial).
 2. Explore existing historical sources within allowed investments and resource ceilings. Retain mechanism, target/duration, original text/URL, publication/revision and availability evidence, confounders, contrary findings and limits.

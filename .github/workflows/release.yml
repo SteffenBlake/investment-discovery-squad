@@ -25,4 +25,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: gh release upload "$RELEASE_TAG" dist/investment-discovery-plugin.zip --clobber
+        run: |
+          archive="dist/investment-discovery-plugin-${RELEASE_TAG}.zip"
+          mv dist/investment-discovery-plugin.zip "$archive"
+          gh release upload "$RELEASE_TAG" "$archive" --clobber

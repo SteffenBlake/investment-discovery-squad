@@ -33,7 +33,7 @@ Changed evidence, source artifacts, destination or elapsed interval triggers bac
 
 `backup verify --file-id ID --expected-identity IDENTITY` explicitly downloads and tests full recovery when requested. Routine uploads use server checksum. `backup snapshot --output PATH` creates local diagnostic archive. `export` writes numerical inspection data.
 
-Retain original installation identity and remote backup file ID in private storage accessible after owner execution environment lost. Archives retain non-secret configuration revisions; rebuild settings from them and reauthorize Google separately.
+Retain original installation identity and remote backup file ID in private storage accessible after owner cloud container lost. Archives retain non-secret configuration revisions; rebuild settings from them and reauthorize Google separately.
 
 ## Recovery
 
