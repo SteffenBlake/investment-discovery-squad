@@ -151,7 +151,7 @@ def _execute(args):
                 graph_status = graph.status()
             return {"initialized": str(store.path), "database_path": str(store.path.resolve()),
                     "setup_identity": store.identity, "mode": store.mode, "monitoring_active": False, "knowledge": graph_status,
-                    "next": "Follow squad-onboard references/setup.md to verify owner, tasks and delivery"}
+                    "next": "Follow squad-onboard references/setup.md for cloud-thread checks, schedules and setup confirmation message"}
         if command == "knowledge":
             if args.action == "context":
                 from .briefing import portfolio_context

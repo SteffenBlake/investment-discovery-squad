@@ -1,12 +1,12 @@
 # Shared commands
 
-Python 3.11+; install `scripts/requirements.txt`, then `setup-runtime`. Checkout entry: `python .agents/skills/squad-onboard/scripts/main.py COMMAND`. Installed plugin resolves sibling squad-onboard entry. Run commands through [saved cloud thread](cloud.md#bind-and-verify-owner) in owner cloud container.
+Python 3.11+; install `scripts/requirements.txt`, then `setup-runtime`. Checkout entry: `python .agents/skills/squad-onboard/scripts/main.py COMMAND`. Installed plugin resolves sibling squad-onboard entry. Run commands through [saved cloud thread](cloud.md#durable-child-task) in child task's cloud container.
 
 ## Setup
 
 | Command | Effect |
 | --- | --- |
-| onboarding | Generated native settings names/types and guides |
+| onboarding | Generated environment variable names/types and guides |
 | setup-runtime | Prepare Ladybug full-text search extension |
 | storage-plan | Concrete storage proposal |
 | init | Check remote backups before empty setup; existing matching stores retain identity |
@@ -68,6 +68,6 @@ Review JSON: `decision` continue/stop, nonempty `reason`, `user_approval` contai
 | backup restore --file-id ID --expected-identity IDENTITY | Recover into empty target |
 | export [--output ABSOLUTE_PATH] | Numerical inspection; defaults beside ledger |
 
-[Storage](storage.md) owns procedures. `deployment sync` updates approved clean checkout; [deployment](../../squad-reconcile/references/deployment.md) owns plugin and jobs.
+[Storage](storage.md) owns procedures. `deployment sync` updates approved clean checkout; [deployment](../../squad-reconcile/references/deployment.md) owns plugin and automations.
 
 Output JSON. Exit 0 completed; 1 failed/rejected operation; 2 run errors. Inspect JSON/stderr and saved state before retry because earlier writes may have committed. [Operations](../../squad-monitor/references/operations.md) owns delivery and `remaining_work`. Timestamps require offsets and store UTC; messages use configured timezone. Imports reject credential-shaped fields and bound secret values before writes.

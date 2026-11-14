@@ -18,7 +18,7 @@ First genuine future prediction starts installation's initial 30-day trial. `tri
 
 At deadline, scheduled research/monitor collection and direct forecast registration stop for review. Report results and uncertainty, including unresolved predictions. User decides continuation based on performance. `trial review --file PRIVATE_FILE` records continue/stop, reason and actual user approval evidence. Continuation lasts explicitly selected 1–30 days. Retain every earlier period and result.
 
-When review required or stopped, disable this installation's research/monitor jobs through [task procedure](../../squad-reconcile/references/deployment.md#native-tasks). Reconciliation and backup remain available. User-approved continuation reuses same jobs.
+When review required or stopped, disable this installation's research/monitor automations through [automation procedure](../../squad-reconcile/references/deployment.md#scheduled-automations). Reconciliation and backup remain available. User-approved continuation reuses same automations.
 
 ## Tests
 

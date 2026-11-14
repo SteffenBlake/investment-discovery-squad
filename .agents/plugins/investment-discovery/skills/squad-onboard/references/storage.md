@@ -1,6 +1,6 @@
 # Storage, ownership and recovery
 
-## One owner, two stores
+## One runtime, two stores
 
 | Component | Contents |
 | --- | --- |
@@ -9,11 +9,11 @@
 | knowledge-sources/ and cache/ beside stores | Original source text and downloaded feed responses |
 | Private Google Drive folder | Latest three successful complete backups |
 
-Keep distinct database files in one private directory outside Git checkouts. Separate backup staging from live files. [Cloud](cloud.md) owns runtime bindings. Owner lock serializes commands. New directories use 0700; ledger/source/JSON files use 0600. Review access on existing directories. Backups include private financial records; host and Drive access controls protect them.
+Keep distinct database files in one private directory outside Git checkouts. Separate backup staging from live files. [Cloud](cloud.md) owns runtime bindings. Runtime lock serializes commands. New directories use 0700; ledger/source/JSON files use 0600. Review access on existing directories. Backups include private financial records; host and Drive access controls protect them.
 
 ## Provision or adopt
 
-`storage-plan` shows paths, Drive limits, interval, three-copy retention and owner. Set `storage.decision_accepted=true` after user accepts arrangement.
+`storage-plan` shows paths, Drive limits, interval, three-copy retention and database-owning runtime. Set `storage.decision_accepted=true` after user accepts arrangement.
 
 Before creating empty databases, `init` lists this installation's remote backups. Existing backup blocks creation and requires recovery. Failed authorization/listing also stops creation. Partial local installation requires recovery. Repeated init on both existing databases retains identity.
 
@@ -33,11 +33,11 @@ Changed evidence, source artifacts, destination or elapsed interval triggers bac
 
 `backup verify --file-id ID --expected-identity IDENTITY` explicitly downloads and tests full recovery when requested. Routine uploads use server checksum. `backup snapshot --output PATH` creates local diagnostic archive. `export` writes numerical inspection data.
 
-Retain original installation identity and remote backup file ID in private storage accessible after owner cloud container lost. Archives retain non-secret configuration revisions; rebuild settings from them and reauthorize Google separately.
+Retain original installation identity and remote backup file ID in private storage accessible after child task's cloud container lost. Archives retain non-secret configuration revisions; rebuild settings from them and reauthorize Google separately.
 
 ## Recovery
 
-Pause jobs using [task procedure](../../squad-reconcile/references/deployment.md#native-tasks). Preserve surviving files. Reinstall originating pinned runtime; bind reviewed settings and original economics. Recover into new empty data directory:
+Pause automations using [automation procedure](../../squad-reconcile/references/deployment.md#scheduled-automations). Preserve surviving files. Reinstall originating pinned runtime; bind reviewed settings and original economics. Recover into new empty data directory:
 
 ```sh
 python .agents/skills/squad-onboard/scripts/main.py backup restore --file-id ACTUAL_ID --expected-identity ORIGINAL_ID
@@ -46,4 +46,4 @@ python .agents/skills/squad-onboard/scripts/main.py doctor
 
 Restore downloads ZIP, validates checksums/schema/ownership, reconstructs graph and verifies contents in temporary storage. Copy under interruption marker; commit `restore_completed` before removing marker. Interrupted target stays blocked; retry into another empty directory.
 
-Inspect saved jobs and destination message history, including sends after backup. [Delivery](../../squad-monitor/references/operations.md#claim-deliver-acknowledge) owns ack/release of uncertain messages. Rebind owner, reconcile jobs and create current backup before resuming approved trial.
+Inspect saved automations and destination message history, including sends after backup. Resolve uncertain investment-alert sends through [alert delivery](../../squad-monitor/references/operations.md#claim-deliver-acknowledge). Reconnect child runtime, reconcile automations and create current backup before resuming approved trial.

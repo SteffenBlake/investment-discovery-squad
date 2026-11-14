@@ -17,7 +17,7 @@ Need Dot, permission to upload plugins in ChatGPT and authorized private Google 
 3. Upload ZIP through ChatGPT's plugin upload and install **investment-discovery**.
 4. Tell Dot: “Use squad-onboard. Create or reuse a durable child task, then follow bundled references/setup.md to perform setup in its cloud container.”
 
-[Setup](.agents/plugins/investment-discovery/skills/squad-onboard/references/setup.md) covers runtime, personal choices, storage consent, account access, backups and scheduled jobs.
+[Setup](.agents/plugins/investment-discovery/skills/squad-onboard/references/setup.md) covers runtime, personal choices, storage consent, account access, backups and scheduled automations.
 
 ## Releases
 
