@@ -3,8 +3,7 @@
   "interface": {"displayName": "Investment discovery workflows"},
   "plugins": [{
     "name": "investment-discovery",
-    "source": {"source": "local", "path": "./plugins/investment-discovery"},
-    "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+    "source": {"source": "local", "path": "./.agents/plugins/investment-discovery"},
     "category": "Productivity"
   }]
 }

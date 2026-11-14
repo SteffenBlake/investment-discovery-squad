@@ -1,8 +1,0 @@
-{
-  "schema_version": 1,
-  "tasks": [
-    {"key": "monitor", "title": "Signal monitoring", "skill": "squad-monitor"},
-    {"key": "research", "title": "Signal discovery", "skill": "squad-research"},
-    {"key": "reconcile", "title": "Workflow reconciliation", "skill": "squad-reconcile"}
-  ]
-}

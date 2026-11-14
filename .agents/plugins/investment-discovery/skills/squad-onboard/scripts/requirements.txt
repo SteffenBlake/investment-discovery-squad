@@ -1,0 +1,2 @@
+ladybug==0.22.3
+exchange_calendars==4.13.2

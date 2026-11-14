@@ -1,0 +1,33 @@
+# Source updates and scheduled jobs
+
+## Source and plugin
+
+Skills live in `.agents/plugins/investment-discovery/skills/squad-*`. Repository discovery paths under `.agents/skills/` symlink to those folders. Edit either path. `SQUAD_REPO` binds approved Git checkout; runtime resources resolve from owning skill.
+
+`main.py deployment sync` requires clean tree, fetches approved origin ref and merges `--ff-only`. Preserve local edits and divergent history. Start fresh process after update; install changed requirements, prepare FTS and run relevant Python tests.
+
+Workspace installation: refresh registered repository/ref through **Admin → Plugins → Marketplaces → selected marketplace → Sync now**, or exposed workspace sync tool. Read sync report and individual plugin failures. [Workspace sync](https://learn.chatgpt.com/docs/enterprise/plugin-management#keep-plugins-up-to-date).
+
+For release, run `python .agents/skills/squad-reconcile/scripts/bundle.py`; archive includes plugin resources and license.
+
+## Native tasks
+
+This procedure owns initial creation and later changes. Discover host's tools to list, create, update and read saved jobs. Identify installation by owner, `profile_id`, skill invocation and existing `squad/PROFILE_ID/WORKFLOW` task key. Ask when ownership ambiguous.
+
+| Workflow | Invocation |
+| --- | --- |
+| monitor | Use $squad-monitor |
+| research | Use $squad-research |
+| reconcile | Use $squad-reconcile |
+
+1. List jobs; update matching returned IDs or create missing jobs. Preserve unrelated jobs and explicit user pauses. Resolve project-owned duplicates.
+2. Set reviewed schedule/timezone, enabled flag, destination, supported model/effort and owner runtime/configuration bindings. Invocation identifies approved checkout and interpreter. Null model/effort restores host preference.
+3. After uncertain mutation, inspect saved state before retry. Read each job back; retain IDs and settings privately.
+4. Execute independent saved worker reopening original research/prediction paths with matching installation identities. Retain successful run in host history. Missing capabilities leave affected work inactive and reported.
+5. Apply [trial](../../squad-monitor/references/validation.md#live-trial) status: expired/stopped trial disables research/monitor jobs; approved continuation restores reviewed enabled choices. Preserve user pauses. Reconcile job remains available.
+
+[Delivery](../../squad-monitor/references/operations.md#claim-deliver-acknowledge) owns message checks. [Native controls](https://learn.chatgpt.com/docs/dots/controls).
+
+## Recovery and rollback
+
+Follow [storage recovery](../../squad-onboard/references/storage.md#recovery) before reactivating jobs. Roll back to reviewed schema-compatible code. Preserve research, prediction results, test plans, statistical attempt counts and uncertain deliveries.

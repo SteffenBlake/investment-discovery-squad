@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from squad.runtime import owner_lock
+from investment_engine.runtime import owner_lock
 
 
 class RuntimeTests(unittest.TestCase):
@@ -12,7 +12,7 @@ class RuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cfg = {'storage': {'database_path': str(Path(directory) / 'data' / 'ledger.sqlite3')}}
             code = """import sys
-from squad.runtime import owner_lock
+from investment_engine.runtime import owner_lock
 try:
     with owner_lock({'storage': {'database_path': sys.argv[1]}}):
         print('acquired')

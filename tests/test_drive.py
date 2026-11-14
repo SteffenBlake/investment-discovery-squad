@@ -6,9 +6,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from squad.configuration import settings
-from squad.drive import Drive, HTTP, PROJECT, Response
-from tests.fixtures import completed_profile
+from investment_engine.configuration import build_runtime_settings
+from investment_engine.drive import Drive, HTTP, PROJECT, Response
+from tests.fixtures import completed_installation
 
 
 def response(value, status=200, headers=None):
@@ -31,7 +31,7 @@ class DriveTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
-        self.settings = settings(completed_profile(self.root))
+        self.settings = build_runtime_settings(completed_installation(self.root))
         self.env = patch.dict(os.environ, {'SQUAD_GOOGLE_REFRESH_TOKEN': 'fictional-refresh', 'SQUAD_GOOGLE_CLIENT_ID': 'fictional-client', 'SQUAD_GOOGLE_CLIENT_SECRET': 'fictional-secret'}, clear=True)
         self.env.start()
 

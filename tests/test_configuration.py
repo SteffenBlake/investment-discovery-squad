@@ -4,35 +4,39 @@ import os
 import sqlite3
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from squad.cli import execute, parser
-from squad.configuration import configuration_template, settings, validate_profile
-from squad.demo import DemoClock, spec_fixture
-from squad.engine import Engine
-from squad.portfolio import Portfolio
-from squad.storage import FROZEN, adopt, backup, backup_due, open_store
-from squad.store import Store
-from squad.util import ROOT, canonical
-from tests.fixtures import completed_profile, native_environment
+from investment_engine.cli import execute, parser
+from investment_engine.configuration import configuration_template, build_runtime_settings, validate_installation
+from tests.fixtures import DemoClock
+from investment_engine.engine import Engine
+from investment_engine.portfolio import Portfolio
+from investment_engine.provisioning import FROZEN, adopt, open_store
+from investment_engine.backups import snapshot
+from investment_engine.ledger import Store
+from investment_engine.util import ROOT, canonical
+from tests.fixtures import completed_installation, native_environment
 
 
 class ConfigurationTests(unittest.TestCase):
     def setUp(self):
+        remote = patch('investment_engine.drive.Drive.list', return_value=[])
+        remote.start()
+        self.addCleanup(remote.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.folder = Path(self.temp.name)
-        self.path = self.folder / "profile.json"
-        self.profile = completed_profile(self.folder)
+        self.installation = completed_installation(self.folder)
 
     def tearDown(self):
         self.temp.cleanup()
 
     def cli(self, *args):
-        with patch.dict(os.environ, native_environment(self.profile)):
+        with patch.dict(os.environ, native_environment(self.installation)):
             return execute(parser().parse_args(list(args)))
 
-    def test_fresh_checkout_has_no_personal_profile_or_implicit_database(self):
+    def test_fresh_checkout_requires_settings_before_initialization(self):
         with patch.dict(os.environ, {}, clear=True):
             result = execute(parser().parse_args(["doctor"]))
             self.assertEqual(result["stage"], "ONBOARDING_REQUIRED")
@@ -43,54 +47,66 @@ class ConfigurationTests(unittest.TestCase):
     def test_template_is_unconfigured_and_cannot_initialize(self):
         template = configuration_template()
         with self.assertRaises(ValueError):
-            validate_profile(template)
+            validate_installation(template)
+
+    def test_init_refuses_empty_databases_when_remote_backup_exists(self):
+        with patch('investment_engine.drive.Drive.list', return_value=[{'id': 'existing-backup'}]):
+            with self.assertRaisesRegex(ValueError, 'Existing Drive backup'):
+                self.cli('init')
+        for key in ('database_path', 'knowledge_path'):
+            self.assertFalse(Path(self.installation['storage'][key]).exists())
+
+    def test_init_preserves_existing_ledger_when_research_database_missing(self):
+        initial = self.cli('init')
+        Path(self.installation['storage']['knowledge_path']).unlink()
+        with patch('investment_engine.drive.Drive.list', return_value=[{'id': 'existing-backup'}]):
+            with self.assertRaisesRegex(ValueError, 'Existing Drive backup'):
+                self.cli('init')
+        self.assertFalse(Path(self.installation['storage']['knowledge_path']).exists())
+        reader = sqlite3.connect(self.installation['storage']['database_path'])
+        try:
+            self.assertEqual(reader.execute("SELECT value FROM meta WHERE key='setup_identity'").fetchone()[0], initial['setup_identity'])
+        finally:
+            reader.close()
 
     def test_storage_proposal_can_be_reviewed_without_database_consent(self):
-        self.profile["storage"]["decision_accepted"] = False
+        self.installation["storage"]["decision_accepted"] = False
         result = self.cli("storage-plan")
         self.assertFalse(result["decision_accepted"])
-        self.assertFalse(Path(self.profile["storage"]["database_path"]).exists())
+        self.assertFalse(Path(self.installation["storage"]["database_path"]).exists())
         with self.assertRaisesRegex(ValueError, "discussion/decision"):
             self.cli("init")
 
-    def test_removed_configuration_file_interfaces_are_rejected(self):
-        import contextlib
-        import io
-        for arguments in (['--profile', str(self.path), 'init'], ['configure', '--file', str(self.path)], ['--db', '/private/ledger.sqlite3', 'status']):
-            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-                parser().parse_args(arguments)
-        self.assertFalse(self.path.exists())
-
-    def test_profile_and_database_must_live_outside_checkout(self):
-        self.profile["storage"]["database_path"] = str(ROOT / "state" / "private.sqlite3")
+    def test_database_must_live_outside_checkout(self):
+        self.installation["storage"]["database_path"] = str(ROOT / "state" / "private.sqlite3")
         with self.assertRaisesRegex(ValueError, "outside"):
-            validate_profile(self.profile)
+            validate_installation(self.installation)
 
-    def test_statistical_rules_cannot_be_overridden_by_private_profile(self):
-        self.profile["family_alpha"] = 1
+    def test_personal_settings_preserve_shared_statistical_rules(self):
+        self.installation["family_alpha"] = 1
         with self.assertRaisesRegex(ValueError, "shared validation"):
-            validate_profile(self.profile)
+            validate_installation(self.installation)
 
     def test_arbitrary_exchange_currency_budget_and_fractional_lots(self):
-        profile = completed_profile(self.folder, currency="EUR", cash="2575.00", timezone="Europe/Berlin", lot="0.25")
-        store = open_store(settings(profile), initialize=True)
+        installation = completed_installation(self.folder, currency="EUR", cash="2575.00", timezone="Europe/Berlin", lot="0.25")
+        store = open_store(build_runtime_settings(installation), initialize=True)
         try:
             clock = DemoClock()
             store.clock = clock
-            engine = Engine(store, settings(profile))
+            engine = Engine(store, build_runtime_settings(installation))
             portfolio = Portfolio(engine)
             portfolio.fill("actual-report", "SYNTH", "buy", "0.75", "20", "1", clock())
-            balance = portfolio.balance()
-            self.assertEqual(balance["currency"], "EUR")
-            self.assertEqual(balance["cash"], "2559.00")
-            self.assertEqual(balance["holdings"], {"SYNTH": "0.75"})
+            reported = json.loads(store.db.execute("SELECT data FROM fills").fetchone()[0])
+            self.assertEqual(reported["currency"], "EUR")
+            self.assertEqual(reported["quantity"], "0.75")
+            self.assertEqual(reported["fee"], "1")
             with self.assertRaisesRegex(ValueError, "lot size"):
                 portfolio.fill("bad-lot", "SYNTH", "buy", "0.1", "20", "0", clock())
         finally:
             store.close()
 
     def test_quote_currency_mismatch_rejected_without_assumed_fx(self):
-        engine_settings = settings(self.profile)
+        engine_settings = build_runtime_settings(self.installation)
         store = open_store(engine_settings, initialize=True)
         try:
             engine = Engine(store, engine_settings)
@@ -99,41 +115,41 @@ class ConfigurationTests(unittest.TestCase):
         finally:
             store.close()
 
-    def test_two_profiles_cannot_share_or_relabel_one_ledger(self):
-        first = settings(self.profile)
+    def test_installations_cannot_share_or_relabel_one_ledger(self):
+        first = build_runtime_settings(self.installation)
         store = open_store(first, initialize=True)
         identity = store.identity
         store.close()
-        other = copy.deepcopy(self.profile)
+        other = copy.deepcopy(self.installation)
         other["profile_id"] = "different-owner"
-        with self.assertRaisesRegex(ValueError, "another profile"):
-            open_store(settings(other), initialize=True)
+        with self.assertRaisesRegex(ValueError, "another installation"):
+            open_store(build_runtime_settings(other), initialize=True)
         store = open_store(first)
         self.assertEqual(store.identity, identity)
         store.close()
 
     def test_budget_change_cannot_recalculate_existing_cash(self):
-        store = open_store(settings(self.profile), initialize=True)
+        store = open_store(build_runtime_settings(self.installation), initialize=True)
         store.close()
-        self.profile["starting_cash"] = "5000"
+        self.installation["starting_cash"] = "5000"
         with self.assertRaisesRegex(ValueError, "Frozen"):
-            open_store(settings(self.profile))
+            open_store(build_runtime_settings(self.installation))
 
     def test_newer_schema_blocks_without_silent_migration(self):
-        store = open_store(settings(self.profile), initialize=True)
+        store = open_store(build_runtime_settings(self.installation), initialize=True)
         store.db.execute("PRAGMA user_version=2")
         store.close()
         with self.assertRaisesRegex(ValueError, "schema"):
-            open_store(settings(self.profile))
+            open_store(build_runtime_settings(self.installation))
 
     def test_read_commands_do_not_initialize_missing_database(self):
         self.assertEqual(self.cli("doctor")["stage"], "DATABASE_NOT_INITIALIZED")
         with self.assertRaises(ValueError):
             self.cli("status")
-        self.assertFalse(Path(self.profile["storage"]["database_path"]).exists())
+        self.assertFalse(Path(self.installation["storage"]["database_path"]).exists())
 
     def test_existing_unbound_database_requires_explicit_backup_and_adoption(self):
-        cfg = settings(self.profile)
+        cfg = build_runtime_settings(self.installation)
         legacy = Store(cfg["storage"]["database_path"], create=True)
         frozen = {key: cfg[key] for key in FROZEN if key != "base_currency"}
         legacy.db.execute("INSERT INTO meta VALUES('frozen_settings',?)", (canonical(frozen),))
@@ -153,15 +169,21 @@ class ConfigurationTests(unittest.TestCase):
             store.close()
 
     def test_online_backup_includes_committed_wal_events(self):
-        store = open_store(settings(self.profile), initialize=True)
+        store = open_store(build_runtime_settings(self.installation), initialize=True)
         try:
             store.event("backup-proof", proof="present")
-            target = self.folder / "backups" / "snapshot.sqlite3"
-            backup(store, target)
+            from investment_engine.knowledge import Knowledge
+            with Knowledge(build_runtime_settings(self.installation), store.identity, create=True):
+                pass
+            target = self.folder / "backups" / "snapshot.zip"
+            snapshot(build_runtime_settings(self.installation), store, target)
             self.assertEqual(target.stat().st_mode & 0o777, 0o600)
             with self.assertRaisesRegex(ValueError, "already exists"):
-                backup(store, target)
-            reader = sqlite3.connect(target)
+                snapshot(build_runtime_settings(self.installation), store, target)
+            extracted = self.folder / "restored.sqlite3"
+            with zipfile.ZipFile(target) as archive:
+                extracted.write_bytes(archive.read("ledger.sqlite3"))
+            reader = sqlite3.connect(extracted)
             try:
                 self.assertEqual(reader.execute("SELECT COUNT(*) FROM events WHERE kind='backup-proof'").fetchone()[0], 1)
             finally:
@@ -170,7 +192,7 @@ class ConfigurationTests(unittest.TestCase):
             store.close()
 
     def test_legacy_incompatible_trade_data_blocks_adoption_without_rebinding(self):
-        cfg = settings(self.profile)
+        cfg = build_runtime_settings(self.installation)
         legacy = Store(cfg["storage"]["database_path"], create=True)
         legacy.db.execute("INSERT INTO meta VALUES('frozen_settings',?)",
                           (canonical({key: cfg[key] for key in FROZEN}),))
@@ -186,12 +208,12 @@ class ConfigurationTests(unittest.TestCase):
         finally:
             connection.close()
 
-    def test_profile_revisions_are_preserved_once_per_content_hash(self):
+    def test_configuration_revisions_saved_once_per_content_hash(self):
         for _ in range(2):
-            store = open_store(settings(self.profile), initialize=True)
+            store = open_store(build_runtime_settings(self.installation), initialize=True)
             store.close()
-        self.profile["notification"]["destination"] = "synthetic://changed-destination"
-        store = open_store(settings(self.profile))
+        self.installation["notification"]["destination"] = "synthetic://changed-destination"
+        store = open_store(build_runtime_settings(self.installation))
         try:
             self.assertEqual(store.db.execute("SELECT COUNT(*) FROM events WHERE kind='profile_revision'").fetchone()[0], 2)
         finally:
@@ -203,23 +225,61 @@ class ConfigurationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "outside"):
                 self.cli(command, "--output", str(ROOT / "private-record.json"))
 
-    def test_monitoring_blocks_before_native_deployment(self):
+    def test_monitoring_uses_configuration_without_cached_deployment(self):
         self.cli("init")
-        with self.assertRaisesRegex(ValueError, "Deployment"):
-            self.cli("run", "--offline")
-        preflight = self.cli("run", "--offline", "--preflight")
-        self.assertEqual(preflight["registered"], [])
+        result = self.cli("run", "--offline")
+        self.assertEqual(result["registered"], [])
 
-    def test_backup_policy_skips_recent_copy_and_recovers_missing_copy(self):
-        cfg = settings(self.profile)
-        store = open_store(cfg, initialize=True)
+    def test_known_legacy_currency_blocks_empty_ledger_relabel(self):
+        for location in ("frozen", "metadata"):
+            with self.subTest(location=location), tempfile.TemporaryDirectory() as folder:
+                cfg = build_runtime_settings(completed_installation(folder))
+                legacy = Store(cfg["storage"]["database_path"], create=True)
+                frozen = {key: cfg[key] for key in FROZEN}
+                if location == "frozen":
+                    frozen["base_currency"] = "EUR"
+                else:
+                    legacy.db.execute("INSERT INTO meta VALUES('base_currency','EUR')")
+                legacy.db.execute("INSERT INTO meta VALUES('frozen_settings',?)", (canonical(frozen),))
+                legacy.event("legacy-proof", value="keep")
+                before = list(legacy.db.execute("SELECT * FROM meta"))
+                identity = legacy.identity
+                legacy.close()
+                with self.assertRaisesRegex(ValueError, "currency differs"):
+                    adopt(cfg, "USD", cfg["starting_cash"])
+                reader = sqlite3.connect(cfg["storage"]["database_path"])
+                try:
+                    self.assertEqual(reader.execute("SELECT * FROM meta").fetchall(), [tuple(r) for r in before])
+                    self.assertEqual(reader.execute("SELECT value FROM meta WHERE key='setup_identity'").fetchone()[0], identity)
+                    self.assertEqual(reader.execute("SELECT count(*) FROM events WHERE kind='legacy-proof'").fetchone()[0], 1)
+                finally:
+                    reader.close()
+
+    def test_private_json_creates_private_directories_under_default_umask(self):
+        from investment_engine.configuration import write_private_json
+        ancestor = self.folder / "shared"
+        ancestor.mkdir(mode=0o755)
+        target = ancestor / "private" / "nested" / "data.json"
+        previous = os.umask(0o022)
         try:
-            first = backup_due(store, cfg)
-            self.assertTrue(first["created"])
-            self.assertFalse(backup_due(store, cfg)["created"])
-            Path(first["backup"]).unlink()
-            recovered = backup_due(store, cfg)
-            self.assertTrue(recovered["created"])
-            self.assertTrue(Path(recovered["backup"]).is_file())
+            write_private_json(target, {"private": "evidence"})
         finally:
-            store.close()
+            os.umask(previous)
+        self.assertEqual(ancestor.stat().st_mode & 0o777, 0o755)
+        for directory in (target.parent, target.parent.parent):
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o600)
+
+    def test_initialization_and_snapshot_create_private_missing_ancestors(self):
+        root = self.folder / "new" / "owner"
+        installation = completed_installation(root)
+        installation["storage"]["backup_directory"] = str(root / "private" / "backups")
+        previous = os.umask(0o022)
+        try:
+            with patch.dict(os.environ, native_environment(installation)):
+                execute(parser().parse_args(["init"]))
+                execute(parser().parse_args(["backup", "snapshot", "--output", str(root / "private" / "backups" / "copy.zip")]))
+        finally:
+            os.umask(previous)
+        for directory in (root.parent, root, root / "data", root / "private", root / "private" / "backups"):
+            self.assertEqual(directory.stat().st_mode & 0o777, 0o700)

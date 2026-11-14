@@ -1,21 +1,20 @@
 import copy
-import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from squad.briefing import portfolio_context
-from squad.configuration import settings
-from squad.engine import Engine
-from squad.knowledge import Knowledge
-from squad.storage import open_store
-from tests.fixtures import completed_profile, research_batch
+from investment_engine.briefing import portfolio_context
+from investment_engine.configuration import build_runtime_settings
+from investment_engine.engine import Engine
+from investment_engine.knowledge import Knowledge
+from investment_engine.provisioning import open_store
+from tests.fixtures import completed_installation, research_batch
 
 
 class KnowledgeTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.settings = settings(completed_profile(self.temp.name))
+        self.settings = build_runtime_settings(completed_installation(self.temp.name))
         self.store = open_store(self.settings, initialize=True)
         self.graph = Knowledge(self.settings, self.store.identity, create=True)
 
@@ -33,6 +32,11 @@ class KnowledgeTests(unittest.TestCase):
         self.assertEqual(context['missing_symbols'], ['UNKNOWN'])
         self.assertEqual(context['claims'][0]['claim']['id'], 'claim:one')
         self.assertIn('company:supplier', [e['id'] for e in context['related_entities']])
+        edge = context['relationships'][0]
+        self.assertEqual((edge['id'], edge['from'], edge['to'], edge['kind'], edge['direction']),
+                         ('relation:one', 'company:supplier', 'asset:SYNTH', 'SUPPLIES', 'from_to'))
+        self.assertEqual(edge['support']['claim']['id'], 'claim:one')
+        self.assertEqual(edge['support']['sources'][0]['url'], 'https://example.invalid/original')
 
     def test_identical_retry_idempotent_but_conflicting_batch_rejected(self):
         first = self.graph.ingest(research_batch())
@@ -110,7 +114,8 @@ class KnowledgeTests(unittest.TestCase):
         self.graph.close()
         try:
             result = portfolio_context(Engine(self.store, self.settings), {'cash': '500', 'currency': 'USD', 'holdings': {'SYNTH': '2', 'UNKNOWN': '3'}})
-            self.assertTrue(result['reconciliation_required'])
+            self.assertTrue(result['portfolio_supplied_by_user'])
+            self.assertEqual(result['portfolio']['cash'], '500')
             self.assertEqual(result['knowledge']['missing_symbols'], ['UNKNOWN'])
             self.assertEqual(self.store.db.execute('SELECT COUNT(*) FROM fills').fetchone()[0], 0)
             self.assertEqual(len(result['knowledge']['claims']), 1)

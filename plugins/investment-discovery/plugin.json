@@ -1,6 +1,0 @@
-{
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "investment-discovery",
-  "version": "0.4.1",
-  "description": "Cloud-first investment research with LadybugDB knowledge, an immutable prediction ledger, native private configuration and verified Google Drive recovery."
-}
